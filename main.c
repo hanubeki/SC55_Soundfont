@@ -1487,7 +1487,7 @@ int32_t main (int32_t argc, char **argv)
 					if(used) {
 						p->pgen[p->pgen_count++].genAmount.wAmount = p->used[sc55->variations[y].variation[x]].partial1;
 					} else {
-						p->pgen[p->pgen_count++].genAmount.wAmount = add_instrument(sc55, s, ins->parts[0].part_index, &ins->parts[1], sf_inst, ins);
+						p->pgen[p->pgen_count++].genAmount.wAmount = add_instrument(sc55, s, ins->parts[1].part_index, &ins->parts[1], sf_inst, ins);
 						p->used[sc55->variations[y].variation[x]].partial1 = p->pgen[p->pgen_count - 1].genAmount.wAmount;
 					}
 				}
