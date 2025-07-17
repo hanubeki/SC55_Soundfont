@@ -1266,10 +1266,11 @@ uint32_t add_instrument(struct synth *sc55, struct sf_samples *s, uint32_t part_
 			i->ibag[i->ibag_count].wInstModNdx = i->imod_count;
 			i->ibag[i->ibag_count++].wInstGenNdx = i->igen_count;
 
+			uint8_t breaks = part->breaks[y] >= 95 ? 127 : part->breaks[y]; // FIXME: Fantasia and Crystal use wrong sample for note 96+
 			i->igen[i->igen_count].sfGenOper = sfg_keyRange;
 			i->igen[i->igen_count].genAmount.ranges.byLo = last_value ? last_value + 1 : 0;
-			i->igen[i->igen_count++].genAmount.ranges.byHi = part->breaks[y];
-			last_value = part->breaks[y];
+			i->igen[i->igen_count++].genAmount.ranges.byHi = breaks;
+			last_value = breaks;
 
 			i->igen[i->igen_count].sfGenOper = sfg_sampleModes;
 			i->igen[i->igen_count++].genAmount.wAmount = sc55->samples[part->samples[y]].loop_mode == 2 ? 0 : 1;
