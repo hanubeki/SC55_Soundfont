@@ -645,26 +645,34 @@ uint32_t apply_riaa_filter(biquad bq, int32_t *sample, size_t len, double vol, u
 	// hpf.nd = 2;
 	// hpf.nn = 2;
 
-	hpf.d[0] = 1.000000000000000L;
-	hpf.d[1] = -0.998038429728411L;
-	hpf.n[0] = 0.999019214864206L;
-	hpf.n[1] = -0.999019214864206l;
+	// hpf.d[0] = 1.000000000000000L;
+	// hpf.d[1] = -0.998038429728411L;
+	// hpf.n[0] = 0.999019214864206L;
+	// hpf.n[1] = -0.999019214864206l;
+	// hpf.nd = 2;
+	// hpf.nn = 2;
+
+	hpf.d[0] = 1.0L;
+	hpf.d[1] = -1.0L;
+	hpf.n[0] = 0.995L;
+	hpf.n[1] = -0.995L;
 	hpf.nd = 2;
 	hpf.nn = 2;
 
-	// Samples use heavy pre-emphasis. RIAA curve x2 appears to make them sound normal.
-	iir_filter(&bq.n[0], &bq.d[0], bq.nd, conv_buffer, conv_buffer2, len);
-	iir_filter(&bq.n[0], &bq.d[0], bq.nd, conv_buffer2, conv_buffer, len);
-
 	// Apply a HPF to remove bias from the audio
 	iir_filter(&hpf.n[0], &hpf.d[0], hpf.nd, conv_buffer, conv_buffer2, len);
+
+	// Samples use heavy pre-emphasis. RIAA curve x2 appears to make them sound normal.
+	iir_filter(&bq.n[0], &bq.d[0], bq.nd, conv_buffer2, conv_buffer, len);
+	iir_filter(&bq.n[0], &bq.d[0], bq.nd, conv_buffer, conv_buffer2, len);
 
 	size_t clipped = 0;
 	for (int32_t x = 0; x < len; x++) {
 		// FIXME: Unfortunately after filtering twice the volume is extremely low, and the range
 		// much too high so I do a raw shift of * 8 and then use a compressor to further increase
 		// the percieved volume.
-		int32_t t_val = compress_sample((conv_buffer2[x] * 4.0L) * attenuate, 16);
+		// int32_t t_val = compress_sample((conv_buffer2[x] * 4.0L) * attenuate, 16);
+		int32_t t_val = (int32_t) roundl((conv_buffer2[x] * 4.0L) * attenuate);
 
 		if (t_val > INT24_MAX) {
 			t_val = INT24_MAX;
@@ -909,7 +917,7 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 
 	uint32_t len = s->shdr[s->num_samples].dwEnd - s->shdr[s->num_samples].dwStart;
 
-	double volume = SC552AMP((double)sc55_samples[source].volume) + (((double)(sc55_samples[source].fine_volume - 1024) / 1000.0));
+	double volume = SC552AMP((double)sc55_samples[source].volume) * pow(10.0, (double)(sc55_samples[source].fine_volume - 1024) / 20000.0);
 
 	uint32_t last_value = 0;
 	for (int32_t x = 0; x < 5; x++) {
@@ -921,7 +929,7 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 
 	// Add data to prevent filter nonsense
 	for (int32_t x = 0; x < (2 * 32000); x++) {
-		sbuf_full[(2 * 32000) - x] = sbuf_full[(2 * 32000) + x];
+		sbuf_full[(2 * 32000) - x - 1] = -sbuf_full[(2 * 32000) + x];
 	}
 	apply_riaa_filter(bq, sbuf_full, len + (2 * 32000), volume, source);
 	
