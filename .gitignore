@@ -4,6 +4,7 @@ waves
 output/*
 roms/*
 documents/*
+sc55sf
 output.txt
 *.rom
 *.bin
