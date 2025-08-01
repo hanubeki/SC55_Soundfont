@@ -201,6 +201,14 @@ typedef struct sample_params {
 	uint8_t s4;
 	uint8_t s5;
 	uint32_t terminal_phase; // The phase that reaches the terminal level
+	double p0; // Pitch envelope
+	double p1;
+	double p2;
+	double p3;
+	double d1;
+	double d2;
+	double d3;
+	double d4;
 } sample_params;
 
 packed_struct sample_record {
@@ -787,6 +795,79 @@ void apply_envelope(int32_t *samples, uint32_t length, double *initial_amplitude
 	*initial_amplitude = current_amp;
 }
 
+// Experimental hanubeki
+// Caution: sinc interpolation is very slow!
+#define USE_SINC
+
+#define SINC(x) ((x) == 0 ? 1 : (sin((x) * asin(1) * 2.0) / ((x) * asin(1) * 2.0)))
+#define SINC8P(x) (abs(x) > 8 ? 0 : (SINC(x)*SINC((x) / 8.0)))
+
+int32_t sampling(int32_t *src, double position, double pitch, size_t sbuf_size, bool handle_loop, uint32_t loop_end_offset, uint32_t loop_length) {
+	#if defined(USE_SINC)
+		double scale = (pitch > 1) ? pitch : 1;
+		int32_t start = ceil(position - 8.0 * scale);
+		double out = 0.0;
+		int32_t point = start;
+		for (int i = 0; i < floor(16 * scale); i++, point++) {
+			if (handle_loop) {
+				while (point > loop_end_offset) {
+					point -= loop_length;
+				}
+				if (position > loop_end_offset) {
+					while (point < 0) {
+						point += loop_length;
+					}
+				}
+			}
+			if (point < 0) {
+				continue;
+			}
+			if (point >= sbuf_size) {
+				break;
+			}
+			out += (double)src[start + i] * SINC8P(((double)point - position) / scale);
+		}
+		return round(out);
+	#else
+		int32_t point = floor(position);
+		if (handle_loop) {
+			while (point > loop_end_offset) {
+				point -= loop_length;
+			}
+			if (position > loop_end_offset) {
+				while (point < 0) {
+					point += loop_length;
+				}
+			}
+		}
+		if (point < 0 || point >= sbuf_size) {
+			return 0;
+		}
+		return src[point];
+	#endif
+}
+
+void apply_pitch_envelope(int32_t *src, int32_t *samples, uint32_t length, double initial_pitch, double target_pitch, uint32_t *buf_position, double *sample_position, size_t sbuf_size, bool handle_loop, uint32_t loop_end_offset, uint32_t loop_length)
+{
+	if (length <= 0) return;
+
+	for (int32_t i = 0; i < length; i++) {
+		if (*buf_position >= sbuf_size) return;
+
+		double sample_offset = *sample_position;
+		// while (handle_loop && (sample_offset > loop_end_offset)) sample_offset -= loop_length;
+
+		double cur_pitch = initial_pitch * (1.0 - (double)i / (double)length) + target_pitch * (double)i / (double)length;
+		double pitch_increment = pow(2.0, cur_pitch / 1200.0);
+
+		samples[*buf_position] = sampling(src, sample_offset, pitch_increment, sbuf_size, handle_loop, loop_end_offset, loop_length);
+		*buf_position += 1;
+		*sample_position += pitch_increment;
+	}
+}
+
+// Experimental hanubeki
+
 #define MIN_SAMPLE_PAD 512
 #define TIME2SAMP(x) ((int32_t)(round(32000.0 * (double)(x))))
 
@@ -835,7 +916,7 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 	s->shdr[s->num_samples].dwEndloop = s->shdr[s->num_samples].dwStart + loop_end_offset;
 
 	// 30 second buffer size
-	int32_t *sbuf_full = calloc(120 * 32000, sizeof(int32_t));
+	int32_t *sbuf_full = calloc(480 * 32000, sizeof(int32_t));
 	int32_t *sbuf = &sbuf_full[2 * 32000];
 	size_t sbuf_size = 0;
 	uint32_t sample_end = address + total_length;
@@ -914,6 +995,96 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 		starts[env_index++] = sbuf_size;
 		real_end = sbuf_size;
 	}
+
+	// Experimental hanubeki
+
+	printf("Sample %d:\n", source);
+
+	bool has_pitch_envelope = (params->p0 != 0.0) || (params->p1 != 0.0) || (params->p2 != 0.0) || (params->p3 != 0.0);
+
+	if (has_pitch_envelope) {
+		loop_start_offset = s->shdr[s->num_samples].dwStartloop - s->shdr[s->num_samples].dwStart - 2;
+		loop_end_offset = s->shdr[s->num_samples].dwEndloop - s->shdr[s->num_samples].dwStart;
+		size_t min_loop = loop_start_offset + 2;
+
+		// Pitch envelope; release envelope, key follow and velocity follow are not supported
+
+		int32_t *pbuf = calloc(360 * 32000, sizeof(int32_t));
+		uint32_t out_pos = 0;
+		double sample_pos = 0.0;
+		bool handle_loop = sc55_samples[source].loop_mode != 2;
+		uint32_t total_loop_length = (loop_end - loop_start) * (sc55_samples[source].loop_mode == 1 ? 2 : 1);
+
+		apply_pitch_envelope(sbuf, pbuf, TIME2SAMP(params->d1), params->p0, params->p1, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
+		apply_pitch_envelope(sbuf, pbuf, TIME2SAMP(params->d2), params->p1, params->p2, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
+		apply_pitch_envelope(sbuf, pbuf, TIME2SAMP(params->d3), params->p2, params->p3, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
+		apply_pitch_envelope(sbuf, pbuf, TIME2SAMP(params->d4), params->p3, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
+
+		if (handle_loop) {
+			uint32_t pitch_terminal = out_pos;
+			int32_t loop_trim = floor(sample_pos) - pitch_terminal;
+
+			printf("loop_start_offset: %d, pitch_terminal: %d, loop_trim: %d\n", loop_start_offset, pitch_terminal, loop_trim);
+			while ((loop_start_offset + 2) < (pitch_terminal + loop_trim)) {
+				apply_pitch_envelope(sbuf, pbuf, total_loop_length, 0.0, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
+				loop_start_offset += total_loop_length;
+				loop_end_offset += total_loop_length;
+				s->shdr[s->num_samples].dwStartloop += total_loop_length;
+				s->shdr[s->num_samples].dwEndloop += total_loop_length;
+			}
+
+			if (loop_trim > 0) {
+				while ((loop_start_offset + 2) < (min_loop + loop_trim)) {
+					apply_pitch_envelope(sbuf, pbuf, total_loop_length, 0.0, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
+					loop_start_offset += total_loop_length;
+					loop_end_offset += total_loop_length;
+					s->shdr[s->num_samples].dwStartloop += total_loop_length;
+					s->shdr[s->num_samples].dwEndloop += total_loop_length;
+				}
+			}
+
+			printf("out_pos: %d, loop_end_offset: %d, total_loop_length: %d\n", out_pos, loop_end_offset, total_loop_length);
+			if (out_pos < (loop_end_offset + 1 - loop_trim)) {
+				apply_pitch_envelope(sbuf, pbuf, (loop_end_offset + 1 - loop_trim) - out_pos, 0.0, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
+			}
+
+			apply_pitch_envelope(sbuf, pbuf, MIN_SAMPLE_PAD, 0.0, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
+
+			if (out_pos < sbuf_size) {
+				apply_pitch_envelope(sbuf, pbuf, sbuf_size - out_pos, 0.0, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
+			}
+
+			loop_start_offset -= loop_trim;
+			loop_end_offset -= loop_trim;
+			s->shdr[s->num_samples].dwStartloop -= loop_trim;
+			s->shdr[s->num_samples].dwEndloop -= loop_trim;
+		} else {
+			printf("sbuf_size: %d, sample_pos: %d\n", sbuf_size, (int32_t)floor(sample_pos));
+			if (sbuf_size > floor(sample_pos)) {
+				apply_pitch_envelope(sbuf, pbuf, sbuf_size - floor(sample_pos), 0.0, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
+			}
+
+			loop_start_offset = out_pos - 2;
+			loop_end_offset = out_pos - 1;
+			s->shdr[s->num_samples].dwStartloop = s->shdr[s->num_samples].dwStart + loop_start_offset + 2;
+			s->shdr[s->num_samples].dwEndloop = s->shdr[s->num_samples].dwStart + loop_end_offset;
+		}
+
+		printf("out_pos: %d\n", out_pos);
+
+		memcpy(sbuf, pbuf, out_pos * sizeof(int32_t));
+		free(pbuf);
+
+		if (handle_loop) {
+			if (sbuf_size < (loop_end_offset + 1 + MIN_SAMPLE_PAD)) sbuf_size = loop_end_offset + 1 + MIN_SAMPLE_PAD;
+		} else {
+			if (sbuf_size < loop_end_offset + 1) sbuf_size = loop_end_offset + 1;
+		}
+
+		starts[env_index - 1] = sbuf_size;
+	}
+
+	// Experimental hanubeki
 
 	s->shdr[s->num_samples].dwEnd = s->data_size + sbuf_size;
 
@@ -1077,6 +1248,18 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	} else {
 		params->terminal_phase = 4;
 	}
+
+	double p_depth = (double)p->pp[12] * 0.3;
+
+	params->p0 = ((double)p->pp[14] - 64.0) * p_depth;
+	params->p1 = ((double)p->pp[15] - 64.0) * p_depth;
+	params->p2 = ((double)p->pp[16] - 64.0) * p_depth;
+	params->p3 = ((double)p->pp[17] - 64.0) * p_depth;
+	
+	params->d1 = CONV_VALUE(p->pp[19]);
+	params->d2 = CONV_VALUE(p->pp[20]);
+	params->d3 = CONV_VALUE(p->pp[21]);
+	params->d4 = CONV_VALUE(p->pp[22]);
 
 	char name[20];
 	clean_name(inst->name, name);
