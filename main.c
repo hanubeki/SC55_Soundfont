@@ -804,7 +804,7 @@ void apply_envelope(int32_t *samples, uint32_t length, double *initial_amplitude
 
 int32_t sampling(int32_t *src, double position, double pitch, size_t sbuf_size, bool handle_loop, uint32_t loop_end_offset, uint32_t loop_length) {
 	#if defined(USE_SINC)
-		double scale = (pitch > 1) ? pitch : 1;
+		double scale = (pitch > 1.0) ? pitch : 1.0;
 		int32_t start = ceil(position - 8.0 * scale);
 		double out = 0.0;
 		int32_t point = start;
@@ -825,7 +825,7 @@ int32_t sampling(int32_t *src, double position, double pitch, size_t sbuf_size, 
 			if (point >= sbuf_size) {
 				break;
 			}
-			out += (double)src[start + i] * SINC8P(((double)point - position) / scale);
+			out += (double)src[point] * SINC8P(((double)(start + i) - position) / scale);
 		}
 		return round(out);
 	#else
@@ -1023,29 +1023,22 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 		if (handle_loop) {
 			uint32_t pitch_terminal = out_pos;
 			int32_t loop_trim = floor(sample_pos) - pitch_terminal;
+			uint32_t loop_modifier = 0;
 
-			printf("loop_start_offset: %d, pitch_terminal: %d, loop_trim: %d\n", loop_start_offset, pitch_terminal, loop_trim);
-			while ((loop_start_offset + 2) < (pitch_terminal + loop_trim)) {
-				apply_pitch_envelope(sbuf, pbuf, total_loop_length, 0.0, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
-				loop_start_offset += total_loop_length;
-				loop_end_offset += total_loop_length;
-				s->shdr[s->num_samples].dwStartloop += total_loop_length;
-				s->shdr[s->num_samples].dwEndloop += total_loop_length;
+			printf("loop_start_offset: %d, loop_end_offset: %d, pitch_terminal: %d, loop_trim: %d\n", loop_start_offset, loop_end_offset, pitch_terminal, loop_trim);
+			while ((loop_start_offset + 2 + loop_modifier) < (pitch_terminal + loop_trim)) {
+				loop_modifier += total_loop_length;
 			}
 
 			if (loop_trim > 0) {
-				while ((loop_start_offset + 2) < (min_loop + loop_trim)) {
-					apply_pitch_envelope(sbuf, pbuf, total_loop_length, 0.0, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
-					loop_start_offset += total_loop_length;
-					loop_end_offset += total_loop_length;
-					s->shdr[s->num_samples].dwStartloop += total_loop_length;
-					s->shdr[s->num_samples].dwEndloop += total_loop_length;
+				while ((loop_start_offset + 2 + loop_modifier) < (min_loop + loop_trim)) {
+					loop_modifier += total_loop_length;
 				}
 			}
 
-			printf("out_pos: %d, loop_end_offset: %d, total_loop_length: %d\n", out_pos, loop_end_offset, total_loop_length);
-			if (out_pos < (loop_end_offset + 1 - loop_trim)) {
-				apply_pitch_envelope(sbuf, pbuf, (loop_end_offset + 1 - loop_trim) - out_pos, 0.0, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
+			printf("loop_modifier: %d, total_loop_length: %d\n", loop_modifier, total_loop_length);
+			if (out_pos < (loop_end_offset + 1 + loop_modifier - loop_trim)) {
+				apply_pitch_envelope(sbuf, pbuf, (loop_end_offset + 1 + loop_modifier - loop_trim) - out_pos, 0.0, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
 			}
 
 			apply_pitch_envelope(sbuf, pbuf, MIN_SAMPLE_PAD, 0.0, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
@@ -1053,6 +1046,11 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 			if (out_pos < sbuf_size) {
 				apply_pitch_envelope(sbuf, pbuf, sbuf_size - out_pos, 0.0, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
 			}
+
+			loop_start_offset += loop_modifier;
+			loop_end_offset += loop_modifier;
+			s->shdr[s->num_samples].dwStartloop += loop_modifier;
+			s->shdr[s->num_samples].dwEndloop += loop_modifier;
 
 			loop_start_offset -= loop_trim;
 			loop_end_offset -= loop_trim;
