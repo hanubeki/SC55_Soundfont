@@ -43,9 +43,11 @@ enum partial_bytes {
 enum inst_header_bytes {
 	ih_attenuation        = 0,
 	ih_note_flags         = 1,
+/*
 	ih_reverb             = 3,
 	ih_chorus             = 4,
 	ih_panpot             = 5,
+*/
 	ih_partial_en         = 6,
 };
 
@@ -1133,6 +1135,7 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	add_igen_word(i, sfg_decayVolEnv, decay ? SEC2SF(decay) : INT16_MIN);
 
 
+/*
 	if (is_drum)
 		add_imod(i, 0x00DB, 0, 0x0010, (((double)drum->reverb[drum_index]/ 127.0) * (double)inst->header[ih_reverb]) * 10, 0);
 	else
@@ -1142,6 +1145,7 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 		add_imod(i, 0x00DD, 0, 0x000F, (((double)drum->chorus[drum_index]/ 127.0) * (double)inst->header[ih_chorus]) * 10, 0);
 	else
 		add_imod(i, 0x00DD, 0, 0x000F, inst->header[ih_chorus] * 10, 0);
+*/
 
 	if(max_sustain) {
 		add_igen_word(i, sfg_sustainVolEnv, 1440);
@@ -1471,10 +1475,12 @@ int32_t main (int32_t argc, char **argv)
 				p->pgen[p->pgen_count].sfGenOper = sfg_initialAttenuation;
 				p->pgen[p->pgen_count++].genAmount.wAmount = PCT2VOL(ins->header[ih_attenuation]);
 
+/*
 				if (ins->header[ih_panpot]) {
 					p->pgen[p->pgen_count].sfGenOper = sfg_pan;
 					p->pgen[p->pgen_count++].genAmount.shAmount = ((double)(ins->header[ih_panpot] - 0x4F) / 79.0) * -500.0;
 				}
+*/
 
 				p->pbag[p->pbag_count++].wGenNdx = p->pgen_count;
 
@@ -1538,10 +1544,10 @@ int32_t main (int32_t argc, char **argv)
 					sf_inst->igen[sf_inst->igen_count].sfGenOper = sfg_initialAttenuation;
 					sf_inst->igen[sf_inst->igen_count++].genAmount.shAmount = PCT2VOL(sc55->drums[x].volume[y]);
 
-					double ih_pan = ((double)((sc55->instruments[sc55->drums[x].preset[y]].header[ih_panpot] ? sc55->instruments[sc55->drums[x].preset[y]].header[ih_panpot] : 0x4F) - 0x4F) / 79.0) * 500.0;
+					// double ih_pan = ((double)((sc55->instruments[sc55->drums[x].preset[y]].header[ih_panpot] ? sc55->instruments[sc55->drums[x].preset[y]].header[ih_panpot] : 0x4F) - 0x4F) / 79.0) * 500.0;
 					double drum_pan =((double)((sc55->drums[x].panpot[y] ? sc55->drums[x].panpot[y] : 0x40) - 0x40) / 64.0);
 
-					drum_pan = ih_panpot + drum_pan;
+					// drum_pan = ih_pan + drum_pan;
 					if (drum_pan > 1.0)
 						drum_pan = 1.0;
 					else if (drum_pan < -1.0)
