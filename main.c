@@ -205,10 +205,12 @@ typedef struct sample_params {
 	double p1;
 	double p2;
 	double p3;
+	// double p5;
 	double d1;
 	double d2;
 	double d3;
 	double d4;
+	// double p5;
 } sample_params;
 
 packed_struct sample_record {
@@ -959,11 +961,21 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 		starts[env_index++] = sbuf_size;
 	}
 
+	// Phase 4
+	if (params->terminal_phase > 4) {
+		addr_ptr = write_sample_data(addr_ptr, loop_start, sc55_samples[source].loop_mode, loop_end,
+			TIME2SAMP(params->t4), &delta, sbuf, &sbuf_size, dec, sample_end);
+		levels[env_index] = params->l4;
+		shapes[env_index] = params->s4;
+		starts[env_index++] = sbuf_size;
+	}
+
 	double final_level = 0;
 	switch (params->terminal_phase) {
 		case 2: final_level = params->l1; break;
 		case 3: final_level = params->l2; break;
 		case 4: final_level = params->l3; break;
+		case 5: final_level = params->l4; break;
 	}
 
 	if (sc55_samples[source].loop_mode != 2) {
@@ -995,16 +1007,33 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 
 	// Experimental hanubeki
 
-	printf("Sample %d:\n", source);
+	// printf("Sample %d:\n", source);
 
+	switch(params->terminal_phase) {
+		case 2:
+			if (params->l2 > params->l1) {
+				printf("Last envelope increasing for sample %d (terminal_phase: 2)\n", source);
+			}
+			break;
+		case 3:
+			if (params->l3 > params->l2) {
+				printf("Last envelope increasing for sample %d (terminal_phase: 3)\n", source);
+			}
+			break;
+		case 4:
+			if (params->l4 > params->l3) {
+				printf("Last envelope increasing for sample %d (terminal_phase: 4)\n", source);
+			}
+			break;
+	}
+
+	// Pitch envelope; release envelope, key follow and velocity follow are not supported
 	bool has_pitch_envelope = (params->p0 != 0.0) || (params->p1 != 0.0) || (params->p2 != 0.0) || (params->p3 != 0.0);
 
 	if (has_pitch_envelope) {
 		loop_start_offset = s->shdr[s->num_samples].dwStartloop - s->shdr[s->num_samples].dwStart - 2;
 		loop_end_offset = s->shdr[s->num_samples].dwEndloop - s->shdr[s->num_samples].dwStart;
 		size_t min_loop = loop_start_offset + 2;
-
-		// Pitch envelope; release envelope, key follow and velocity follow are not supported
 
 		int32_t *pbuf = calloc(360 * 32000, sizeof(int32_t));
 		uint32_t out_pos = 0;
@@ -1022,7 +1051,7 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 			int32_t loop_trim = floor(sample_pos) - pitch_terminal;
 			uint32_t loop_modifier = 0;
 
-			printf("loop_start_offset: %d, loop_end_offset: %d, pitch_terminal: %d, loop_trim: %d\n", loop_start_offset, loop_end_offset, pitch_terminal, loop_trim);
+			// printf("loop_start_offset: %d, loop_end_offset: %d, pitch_terminal: %d, loop_trim: %d\n", loop_start_offset, loop_end_offset, pitch_terminal, loop_trim);
 			while ((loop_start_offset + 2 + loop_modifier) < (pitch_terminal + loop_trim)) {
 				loop_modifier += total_loop_length;
 			}
@@ -1033,7 +1062,7 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 				}
 			}
 
-			printf("loop_modifier: %d, total_loop_length: %d\n", loop_modifier, total_loop_length);
+			// printf("loop_modifier: %d, total_loop_length: %d\n", loop_modifier, total_loop_length);
 			if (out_pos < (loop_end_offset + 1 + loop_modifier - loop_trim)) {
 				apply_pitch_envelope(sbuf, pbuf, (loop_end_offset + 1 + loop_modifier - loop_trim) - out_pos, 0.0, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
 			}
@@ -1054,7 +1083,7 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 			s->shdr[s->num_samples].dwStartloop -= loop_trim;
 			s->shdr[s->num_samples].dwEndloop -= loop_trim;
 		} else {
-			printf("sbuf_size: %d, sample_pos: %d\n", sbuf_size, (int32_t)floor(sample_pos));
+			// printf("sbuf_size: %d, sample_pos: %d\n", sbuf_size, (int32_t)floor(sample_pos));
 			if (sbuf_size > floor(sample_pos)) {
 				apply_pitch_envelope(sbuf, pbuf, sbuf_size - floor(sample_pos), 0.0, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
 			}
@@ -1065,7 +1094,7 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 			s->shdr[s->num_samples].dwEndloop = s->shdr[s->num_samples].dwStart + loop_end_offset;
 		}
 
-		printf("out_pos: %d\n", out_pos);
+		// printf("out_pos: %d\n", out_pos);
 
 		memcpy(sbuf, pbuf, out_pos * sizeof(int32_t));
 		free(pbuf);
@@ -1230,18 +1259,21 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	params->s4 = (p->pp[pp_tva_p4_len] & 0x80) ? 0 : 1;
 	params->s5 = (p->pp[pp_tva_p5_len] & 0x80) ? 0 : 1;
 
-	uint8_t terminal_atten = 0x7F;
+	// uint8_t terminal_atten = 0x7F;
+	double terminal_vol = 1.0;
 
 	if (p->pp[pp_tva_p2_vol] == 0) {
 		params->terminal_phase = 2;
 	} else if (p->pp[pp_tva_p3_vol] == 0) {
 		params->terminal_phase = 3;
-	} else if (p->pp[pp_tva_p3_vol] == p->pp[pp_tva_p2_vol] && p->pp[pp_tva_p3_vol] == p->pp[pp_tva_p4_vol]) {
+	} else if (p->pp[pp_tva_p3_vol] == p->pp[pp_tva_p2_vol] && p->pp[pp_tva_p3_vol] == p->pp[pp_tva_p4_vol] && p2_vol <= p1_vol) {
 		params->terminal_phase = 2;
-	} else if(p->pp[pp_tva_p3_vol] == p->pp[pp_tva_p4_vol]) {
+	} else if(p->pp[pp_tva_p3_vol] == p->pp[pp_tva_p4_vol] && p3_vol <= p2_vol) {
 		params->terminal_phase = 3;
-	} else {
+	} else if (p4_vol <= p3_vol) {
 		params->terminal_phase = 4;
+	} else {
+		params->terminal_phase = 5;
 	}
 
 	double p_depth = (double)p->pp[12] * 0.3;
@@ -1250,11 +1282,13 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	params->p1 = ((double)p->pp[15] - 64.0) * p_depth;
 	params->p2 = ((double)p->pp[16] - 64.0) * p_depth;
 	params->p3 = ((double)p->pp[17] - 64.0) * p_depth;
-	
+	// params->p5 = ((double)p->pp[18] - 64.0) * p_depth;
+
 	params->d1 = CONV_VALUE(p->pp[19]);
 	params->d2 = CONV_VALUE(p->pp[20]);
 	params->d3 = CONV_VALUE(p->pp[21]);
 	params->d4 = CONV_VALUE(p->pp[22]);
+	// params->d5 = CONV_VALUE(p->pp[23]);
 
 	char name[20];
 	clean_name(inst->name, name);
@@ -1278,19 +1312,29 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 		case 2:
 			hold = p1_val;
 			decay = !params->s2 ? p2_val * 2.0 : p2_val;
-			terminal_atten = p->pp[pp_tva_p2_vol];
+			// terminal_atten = p->pp[pp_tva_p2_vol];
+			terminal_vol = p2_vol / p1_vol;
 			break;
 
 		case 3:
 			hold = p1_val + p2_val;
 			decay = !params->s3 ? p3_val * 2.0 :p3_val;
-			terminal_atten = p->pp[pp_tva_p3_vol];
+			// terminal_atten = p->pp[pp_tva_p3_vol];
+			terminal_vol = p3_vol / p2_vol;
+			break;
+
+		case 4:
+			hold = p1_val + p2_val + p3_val;
+			decay = !params->s4 ? p4_val * 2.0 : p4_val;
+			// terminal_atten = p->pp[pp_tva_p4_vol];
+			terminal_vol = p4_vol / p3_vol;
 			break;
 
 		default:
-			hold = p1_val + p2_val + p3_val;
-			decay = !params->s4 ? p4_val * 2.0 : p4_val;
-			terminal_atten = p->pp[pp_tva_p4_vol];
+			hold = p1_val + p2_val + p3_val + p4_val;
+			decay = 0;
+			// terminal_atten = p->pp[pp_tva_p4_vol];
+			terminal_vol = 1.0;
 			break;
 	}
 
@@ -1328,7 +1372,8 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	if(max_sustain) {
 		add_igen_word(i, sfg_sustainVolEnv, 1440);
 	} else {
-		add_igen_word(i, sfg_sustainVolEnv, round(PCT2VOL(terminal_atten)));
+		// add_igen_word(i, sfg_sustainVolEnv, round(PCT2VOL(terminal_atten)));
+		add_igen_word(i, sfg_sustainVolEnv, (terminal_vol > 0) ? round(MAG2DB(terminal_vol)) : 1440);
 	}
 
 	if (is_drum)
