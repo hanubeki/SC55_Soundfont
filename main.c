@@ -796,11 +796,11 @@ void apply_envelope(int32_t *samples, uint32_t length, double *initial_amplitude
 }
 
 // Experimental hanubeki
-// Caution: sinc interpolation is very slow!
+// Caution: sinc interpolation is very slow but highly recommended!
 #define USE_SINC
 
-#define SINC(x) ((x) == 0 ? 1 : (sin((x) * asin(1) * 2.0) / ((x) * asin(1) * 2.0)))
-#define SINC8P(x) (abs(x) > 8 ? 0 : (SINC(x)*SINC((x) / 8.0)))
+#define SINC(x) ((x) == 0.0 ? 1.0 : (sin((x) * asin(1.0) * 2.0) / ((x) * asin(1.0) * 2.0)))
+#define SINC8P(x) (abs(x) > 8.0 ? 0.0 : (SINC(x) * SINC((x) / 8.0)))
 
 int32_t sampling(int32_t *src, double position, double pitch, size_t sbuf_size, bool handle_loop, uint32_t loop_end_offset, uint32_t loop_length) {
 	#if defined(USE_SINC)
@@ -854,13 +854,10 @@ void apply_pitch_envelope(int32_t *src, int32_t *samples, uint32_t length, doubl
 	for (int32_t i = 0; i < length; i++) {
 		if (*buf_position >= sbuf_size) return;
 
-		double sample_offset = *sample_position;
-		// while (handle_loop && (sample_offset > loop_end_offset)) sample_offset -= loop_length;
-
 		double cur_pitch = initial_pitch * (1.0 - (double)i / (double)length) + target_pitch * (double)i / (double)length;
 		double pitch_increment = pow(2.0, cur_pitch / 1200.0);
 
-		samples[*buf_position] = sampling(src, sample_offset, pitch_increment, sbuf_size, handle_loop, loop_end_offset, loop_length);
+		samples[*buf_position] = sampling(src, *sample_position, pitch_increment, sbuf_size, handle_loop, loop_end_offset, loop_length);
 		*buf_position += 1;
 		*sample_position += pitch_increment;
 	}
@@ -1062,7 +1059,7 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 				apply_pitch_envelope(sbuf, pbuf, sbuf_size - floor(sample_pos), 0.0, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
 			}
 
-			loop_start_offset = out_pos - 2;
+			loop_start_offset = out_pos - 3;
 			loop_end_offset = out_pos - 1;
 			s->shdr[s->num_samples].dwStartloop = s->shdr[s->num_samples].dwStart + loop_start_offset + 2;
 			s->shdr[s->num_samples].dwEndloop = s->shdr[s->num_samples].dwStart + loop_end_offset;
