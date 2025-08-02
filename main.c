@@ -930,9 +930,9 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 	// may end up being extremely long regardless.
 
 	uint32_t env_index = 0;
-	size_t starts[5] = {0};
-	double levels[5] = {0};
-	uint8_t shapes[5] = {0};
+	size_t starts[6] = {0};
+	double levels[6] = {0};
+	uint8_t shapes[6] = {0};
 
 	uint32_t env_start = 0;
 	double initial_amplitude = 0.000001;
@@ -961,11 +961,21 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 		starts[env_index++] = sbuf_size;
 	}
 
+	// Phase 4
+	if (params->terminal_phase > 4) {
+		addr_ptr = write_sample_data(addr_ptr, loop_start, sc55_samples[source].loop_mode, loop_end,
+			TIME2SAMP(params->t4), &delta, sbuf, &sbuf_size, dec, sample_end);
+		levels[env_index] = params->l4;
+		shapes[env_index] = params->s4;
+		starts[env_index++] = sbuf_size;
+	}
+
 	double final_level = 0;
 	switch (params->terminal_phase) {
 		case 2: final_level = params->l1; break;
 		case 3: final_level = params->l2; break;
 		case 4: final_level = params->l3; break;
+		case 5: final_level = params->l4; break;
 	}
 
 	if (sc55_samples[source].loop_mode != 2) {
@@ -998,6 +1008,24 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 	// Experimental hanubeki
 
 	// printf("Sample %d:\n", source);
+
+	switch(params->terminal_phase) {
+		case 2:
+			if (params->l2 > params->l1) {
+				printf("Last envelope increasing for sample %d (terminal_phase: 2)\n", source);
+			}
+			break;
+		case 3:
+			if (params->l3 > params->l2) {
+				printf("Last envelope increasing for sample %d (terminal_phase: 3)\n", source);
+			}
+			break;
+		case 4:
+			if (params->l4 > params->l3) {
+				printf("Last envelope increasing for sample %d (terminal_phase: 4)\n", source);
+			}
+			break;
+	}
 
 	// Pitch envelope; release envelope, key follow and velocity follow are not supported
 	bool has_pitch_envelope = (params->p0 != 0.0) || (params->p1 != 0.0) || (params->p2 != 0.0) || (params->p3 != 0.0);
@@ -1231,18 +1259,21 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	params->s4 = (p->pp[pp_tva_p4_len] & 0x80) ? 0 : 1;
 	params->s5 = (p->pp[pp_tva_p5_len] & 0x80) ? 0 : 1;
 
-	uint8_t terminal_atten = 0x7F;
+	// uint8_t terminal_atten = 0x7F;
+	double terminal_vol = 1.0;
 
 	if (p->pp[pp_tva_p2_vol] == 0) {
 		params->terminal_phase = 2;
 	} else if (p->pp[pp_tva_p3_vol] == 0) {
 		params->terminal_phase = 3;
-	} else if (p->pp[pp_tva_p3_vol] == p->pp[pp_tva_p2_vol] && p->pp[pp_tva_p3_vol] == p->pp[pp_tva_p4_vol]) {
+	} else if (p->pp[pp_tva_p3_vol] == p->pp[pp_tva_p2_vol] && p->pp[pp_tva_p3_vol] == p->pp[pp_tva_p4_vol] && p2_vol <= p1_vol) {
 		params->terminal_phase = 2;
-	} else if(p->pp[pp_tva_p3_vol] == p->pp[pp_tva_p4_vol]) {
+	} else if(p->pp[pp_tva_p3_vol] == p->pp[pp_tva_p4_vol] && p3_vol <= p2_vol) {
 		params->terminal_phase = 3;
-	} else {
+	} else if (p4_vol <= p3_vol) {
 		params->terminal_phase = 4;
+	} else {
+		params->terminal_phase = 5;
 	}
 
 	double p_depth = (double)p->pp[12] * 0.18;
@@ -1281,19 +1312,29 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 		case 2:
 			hold = p1_val;
 			decay = !params->s2 ? p2_val * 2.0 : p2_val;
-			terminal_atten = p->pp[pp_tva_p2_vol];
+			// terminal_atten = p->pp[pp_tva_p2_vol];
+			terminal_vol = p2_vol / p1_vol;
 			break;
 
 		case 3:
 			hold = p1_val + p2_val;
 			decay = !params->s3 ? p3_val * 2.0 :p3_val;
-			terminal_atten = p->pp[pp_tva_p3_vol];
+			// terminal_atten = p->pp[pp_tva_p3_vol];
+			terminal_vol = p3_vol / p2_vol;
+			break;
+
+		case 4:
+			hold = p1_val + p2_val + p3_val;
+			decay = !params->s4 ? p4_val * 2.0 : p4_val;
+			// terminal_atten = p->pp[pp_tva_p4_vol];
+			terminal_vol = p4_vol / p3_vol;
 			break;
 
 		default:
-			hold = p1_val + p2_val + p3_val;
-			decay = !params->s4 ? p4_val * 2.0 : p4_val;
-			terminal_atten = p->pp[pp_tva_p4_vol];
+			hold = p1_val + p2_val + p3_val + p4_val;
+			decay = 0;
+			// terminal_atten = p->pp[pp_tva_p4_vol];
+			terminal_vol = 1.0;
 			break;
 	}
 
@@ -1331,7 +1372,8 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	if(max_sustain) {
 		add_igen_word(i, sfg_sustainVolEnv, 1440);
 	} else {
-		add_igen_word(i, sfg_sustainVolEnv, round(PCT2VOL(terminal_atten)));
+		// add_igen_word(i, sfg_sustainVolEnv, round(PCT2VOL(terminal_atten)));
+		add_igen_word(i, sfg_sustainVolEnv, (terminal_vol > 0) ? round(MAG2DB(terminal_vol)) : 1440);
 	}
 
 	if (is_drum)
