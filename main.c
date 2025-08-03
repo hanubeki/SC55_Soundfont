@@ -637,10 +637,12 @@ void export_sample(int32_t *samples, size_t num_samples, char *file_name)
 	free(sample_24);
 }
 
+// It doesn't do RIAA filter anymore but leave it for collecting clipped samples
 uint32_t apply_riaa_filter(biquad bq, int32_t *sample, size_t len, double vol, uint32_t sample_num)
 {
 	long double attenuate = vol / (SC552AMP(127));
 
+/*
 	long double *conv_buffer = calloc(len + 1000, sizeof(long double));
 	long double *conv_buffer2 = calloc(len + 1000, sizeof(long double));
 
@@ -677,6 +679,7 @@ uint32_t apply_riaa_filter(biquad bq, int32_t *sample, size_t len, double vol, u
 	// Samples use heavy pre-emphasis. RIAA curve x2 appears to make them sound normal.
 	iir_filter(&bq.n[0], &bq.d[0], bq.nd, conv_buffer2, conv_buffer, len);
 	iir_filter(&bq.n[0], &bq.d[0], bq.nd, conv_buffer, conv_buffer2, len);
+*/
 
 	size_t clipped = 0;
 	for (int32_t x = 0; x < len; x++) {
@@ -684,7 +687,8 @@ uint32_t apply_riaa_filter(biquad bq, int32_t *sample, size_t len, double vol, u
 		// much too high so I do a raw shift of * 8 and then use a compressor to further increase
 		// the percieved volume.
 		// int32_t t_val = compress_sample((conv_buffer2[x] * 4.0L) * attenuate, 16);
-		int32_t t_val = (int32_t) roundl((conv_buffer2[x] * 4.0L) * attenuate);
+		// int32_t t_val = (int32_t) roundl((conv_buffer2[x] * 4.0L) * attenuate);
+		int32_t t_val = (int32_t) roundl(sample[x] * attenuate);
 
 		if (t_val > INT24_MAX) {
 			t_val = INT24_MAX;
@@ -700,12 +704,15 @@ uint32_t apply_riaa_filter(biquad bq, int32_t *sample, size_t len, double vol, u
 	if (clipped)
 		printf("%ld samples clipped in sample %d\n", clipped, sample_num);
 
+/*
 	free(conv_buffer);
 	free(conv_buffer2);
+*/
 
 	return len;
 }
 
+//FIXME: Unused
 int32_t make_sample(uint8_t *decoded_rom, uint32_t address)
 {
 	int8_t data_byte = decoded_rom[address];
@@ -717,9 +724,31 @@ int32_t make_sample(uint8_t *decoded_rom, uint32_t address)
 	return final;
 }
 
-uint32_t write_sample_data(uint32_t address, uint32_t loop_start, uint32_t loop_mode, uint32_t loop_end, int32_t length,
-	int32_t *delta, int32_t *samples, size_t *data_size, uint8_t *decoded_rom, uint32_t sample_end)
+void decode_dpcm(int32_t *buffer, uint8_t *decoded_rom, uint32_t start, uint32_t length)
 {
+	int32_t sample = 0;
+
+	for (uint32_t i = 0; i < length; i++) {
+		uint32_t address = start + i;
+		int8_t data_byte = decoded_rom[address];
+		uint8_t shift_byte = decoded_rom[((address & 0xFFFFF) >> 5) | (address & 0xF00000)];
+		uint8_t shift_nibble = (address & 0x10) ? (shift_byte >> 4 ) : (shift_byte & 0x0F);
+		int32_t final = ((data_byte << shift_nibble) << 14); // Shift nibbles thus far never exceed 10, thus 18 bit samples
+		final = final >> 8; // To maintain sign for 24 bit sample
+		sample += final; // Apply DPCM
+
+		buffer[i] = sample;
+	}
+}
+
+uint32_t write_sample_data(uint32_t address, int32_t loop_start, uint32_t loop_mode, int32_t loop_end, int32_t length,
+	int32_t *delta, int32_t *samples, size_t *data_size, uint8_t *decoded_rom, uint32_t sample_end, int32_t *dbuf)
+{
+	if (loop_start < 0) {
+		printf("Invalid Loop Start %d\n", loop_start);
+		return address;
+	}
+
 	if (length <= 0) {
 		printf("Invalid Length %d written\n", length);
 		return address;
@@ -729,34 +758,33 @@ uint32_t write_sample_data(uint32_t address, uint32_t loop_start, uint32_t loop_
 	switch (loop_mode) {
 		case 0:
 			while (length--) {
-				samples[*data_size] = make_sample(decoded_rom, address++);
+				samples[*data_size] = dbuf[address++];
 				*data_size = *data_size + 1;
-				if (address == loop_end) address = loop_start;
+				if (address >= loop_end) address = loop_start;
 			}
 		break;
 
 		case 1:
 			while (length--) {
-				samples[*data_size] = make_sample(decoded_rom, address);
+				samples[*data_size] = dbuf[address] * (*delta);
 				*data_size = *data_size + 1;
-				address += *delta;
-				if (address > loop_end) {
+				if (address == loop_end - 1 && *delta > 0) {
 					*delta = -1;
-					address--;
 				} else if (address == loop_start && *delta < 0) {
 					*delta = 1;
-					address++;
+				} else {
+					address += *delta;
 				}
 			}
 		break;
 
 		case 2:
 			while (length--) {
-				if (address > sample_end) {
+				if (address >= sample_end) {
 					printf("Sample writing exceeded end of sample in non-looping sample by %d bytes.\n", length);
 					return address;
 				}
-				samples[*data_size] = make_sample(decoded_rom, address++);
+				samples[*data_size] = dbuf[address++];
 				*data_size = *data_size + 1;
 			}
 		break;
@@ -772,10 +800,7 @@ void apply_envelope(int32_t *samples, uint32_t length, double *initial_amplitude
 	int32_t total_length = length;
 	double max_amp = SC552AMP(0X7F);
 	double level_difference = (target_amplitude - *initial_amplitude);
-	uint32_t samp_index = 0;
-	while (1) {
-		samp_index++;
-		if (samp_index > length) break;
+	for (uint32_t samp_index = 0; samp_index < length; samp_index++) {
 		switch (shape) {
 			case 0: // Linear
 				current_amp = *initial_amplitude + level_difference * ((double)samp_index / (double)length);
@@ -804,7 +829,7 @@ void apply_envelope(int32_t *samples, uint32_t length, double *initial_amplitude
 #define SINC(x) ((x) == 0.0 ? 1.0 : (sin((x) * asin(1.0) * 2.0) / ((x) * asin(1.0) * 2.0)))
 #define SINC8P(x) (abs(x) > 8.0 ? 0.0 : (SINC(x) * SINC((x) / 8.0)))
 
-int32_t sampling(int32_t *src, double position, double pitch, size_t sbuf_size, bool handle_loop, uint32_t loop_end_offset, uint32_t loop_length) {
+int32_t sampling(int32_t *src, double position, double pitch, size_t sbuf_size, bool handle_loop, int32_t loop_end_offset, uint32_t loop_length) {
 	#if defined(USE_SINC)
 		double scale = (pitch > 1.0) ? pitch : 1.0;
 		int32_t start = ceil(position - 8.0 * scale);
@@ -812,10 +837,10 @@ int32_t sampling(int32_t *src, double position, double pitch, size_t sbuf_size, 
 		int32_t point = start;
 		for (int i = 0; i < floor(16 * scale); i++, point++) {
 			if (handle_loop) {
-				while (point > loop_end_offset) {
+				while (point >= loop_end_offset) {
 					point -= loop_length;
 				}
-				if (position > loop_end_offset) {
+				if (position >= loop_end_offset) {
 					while (point < 0) {
 						point += loop_length;
 					}
@@ -833,10 +858,10 @@ int32_t sampling(int32_t *src, double position, double pitch, size_t sbuf_size, 
 	#else
 		int32_t point = floor(position);
 		if (handle_loop) {
-			while (point > loop_end_offset) {
+			while (point >= loop_end_offset) {
 				point -= loop_length;
 			}
-			if (position > loop_end_offset) {
+			if (position >= loop_end_offset) {
 				while (point < 0) {
 					point += loop_length;
 				}
@@ -849,7 +874,7 @@ int32_t sampling(int32_t *src, double position, double pitch, size_t sbuf_size, 
 	#endif
 }
 
-void apply_pitch_envelope(int32_t *src, int32_t *samples, uint32_t length, double initial_pitch, double target_pitch, uint32_t *buf_position, double *sample_position, size_t sbuf_size, bool handle_loop, uint32_t loop_end_offset, uint32_t loop_length)
+void apply_pitch_envelope(int32_t *src, int32_t *samples, uint32_t length, double initial_pitch, double target_pitch, uint32_t *buf_position, double *sample_position, size_t sbuf_size, bool handle_loop, int32_t loop_end_offset, uint32_t loop_length)
 {
 	if (length <= 0) return;
 
@@ -895,10 +920,10 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 	}
 	uint32_t address = (sample_address & 0xFFFFF) | bank;
 	uint32_t total_length = sc55_samples[source].sample_len + 1;
-	uint32_t loop_length = sc55_samples[source].loop_len;
+	uint32_t loop_length = sc55_samples[source].loop_len + 1;
 
-	uint32_t loop_start_offset = total_length - 2 - loop_length;
-	uint32_t loop_end_offset = total_length - 1;
+	int32_t loop_start_offset = total_length - loop_length;
+	int32_t loop_end_offset = total_length;
 	int32_t loop_start = address + loop_start_offset;
 	int32_t loop_end = address + loop_end_offset;
 
@@ -911,8 +936,14 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 	s->shdr[s->num_samples].wSampleLink = 0;
 	s->shdr[s->num_samples].chPitchCorrection = round(((double)sc55_samples[source].pitch - 1024.0) / 10.0);
 	s->shdr[s->num_samples].dwStart = s->data_size;
-	s->shdr[s->num_samples].dwStartloop = s->shdr[s->num_samples].dwStart + loop_start_offset + 2;
+	s->shdr[s->num_samples].dwStartloop = s->shdr[s->num_samples].dwStart + loop_start_offset;
 	s->shdr[s->num_samples].dwEndloop = s->shdr[s->num_samples].dwStart + loop_end_offset;
+
+	// hanubeki: Sample data is DPCM so decode it first.
+	// printf("sample: %d, address: %d, loop_mode: %d\n", source, address, sc55_samples[source].loop_mode);
+	// printf("loop_start_offset: %d, loop_end_offset: %d, total_length: %d, loop_length: %d\n", loop_start_offset, loop_end_offset, total_length, loop_length);
+	int32_t *dec_buf = calloc(total_length, sizeof(int32_t));
+	decode_dpcm(dec_buf, dec, address, total_length);
 
 	// 30 second buffer size
 	int32_t *sbuf_full = calloc(480 * 32000, sizeof(int32_t));
@@ -921,7 +952,7 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 	uint32_t sample_end = address + total_length;
 
 	int32_t delta = 1;
-	uint32_t addr_ptr = address;
+	uint32_t addr_ptr = 0;
 	uint32_t real_end = 0;
 
 	// Phase 1, Phase 2, and Phase 5 always exist. The other two are optional. However, because the
@@ -937,16 +968,16 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 	uint32_t env_start = 0;
 	double initial_amplitude = 0.000001;
 	// Phase 1 (Attack)
-	addr_ptr = write_sample_data(addr_ptr, loop_start, sc55_samples[source].loop_mode, loop_end,
-		TIME2SAMP(params->t1), &delta, sbuf, &sbuf_size, dec, sample_end);
+	addr_ptr = write_sample_data(addr_ptr, loop_start_offset, sc55_samples[source].loop_mode, loop_end_offset,
+		TIME2SAMP(params->t1), &delta, sbuf, &sbuf_size, dec, total_length, dec_buf);
 	levels[env_index] = params->l1;
 	shapes[env_index] = params->s1;
 	starts[env_index++] = sbuf_size;
 
 	// Phase 2
 	if (params->terminal_phase > 2) {
-		addr_ptr = write_sample_data(addr_ptr, loop_start, sc55_samples[source].loop_mode, loop_end,
-			TIME2SAMP(params->t2), &delta, sbuf, &sbuf_size, dec, sample_end);
+		addr_ptr = write_sample_data(addr_ptr, loop_start_offset, sc55_samples[source].loop_mode, loop_end_offset,
+			TIME2SAMP(params->t2), &delta, sbuf, &sbuf_size, dec, total_length, dec_buf);
 		levels[env_index] = params->l2;
 		shapes[env_index] = params->s2;
 		starts[env_index++] = sbuf_size;
@@ -954,8 +985,8 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 
 	// Phase 3
 	if (params->terminal_phase > 3) {
-		addr_ptr = write_sample_data(addr_ptr, loop_start, sc55_samples[source].loop_mode, loop_end,
-			TIME2SAMP(params->t3), &delta, sbuf, &sbuf_size, dec, sample_end);
+		addr_ptr = write_sample_data(addr_ptr, loop_start_offset, sc55_samples[source].loop_mode, loop_end_offset,
+			TIME2SAMP(params->t3), &delta, sbuf, &sbuf_size, dec, total_length, dec_buf);
 		levels[env_index] = params->l3;
 		shapes[env_index] = params->s3;
 		starts[env_index++] = sbuf_size;
@@ -963,8 +994,8 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 
 	// Phase 4
 	if (params->terminal_phase > 4) {
-		addr_ptr = write_sample_data(addr_ptr, loop_start, sc55_samples[source].loop_mode, loop_end,
-			TIME2SAMP(params->t4), &delta, sbuf, &sbuf_size, dec, sample_end);
+		addr_ptr = write_sample_data(addr_ptr, loop_start_offset, sc55_samples[source].loop_mode, loop_end_offset,
+			TIME2SAMP(params->t4), &delta, sbuf, &sbuf_size, dec, total_length, dec_buf);
 		levels[env_index] = params->l4;
 		shapes[env_index] = params->s4;
 		starts[env_index++] = sbuf_size;
@@ -980,30 +1011,36 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 
 	if (sc55_samples[source].loop_mode != 2) {
 		// Square off sample to the nearest loop
-		addr_ptr = write_sample_data(addr_ptr, loop_start, sc55_samples[source].loop_mode, loop_end,
-			delta < 0 ? loop_length + (loop_end - addr_ptr) : (loop_end - addr_ptr), &delta, sbuf, &sbuf_size, dec, sample_end);
-		s->shdr[s->num_samples].dwStartloop = s->data_size + sbuf_size; //FIXME: - 1?
-		addr_ptr = write_sample_data(addr_ptr, loop_start, sc55_samples[source].loop_mode, loop_end,
-			(loop_end - loop_start) * (sc55_samples[source].loop_mode == 1 ? 2 : 1), &delta, sbuf, &sbuf_size, dec, sample_end);
+		size_t remaining_loop = (loop_end_offset - addr_ptr);
+		if (sc55_samples[source].loop_mode == 1) {
+			remaining_loop = delta > 0 ? loop_length + (loop_end_offset - addr_ptr) : (addr_ptr - loop_start_offset + 1);
+		}
+		addr_ptr = write_sample_data(addr_ptr, loop_start_offset, sc55_samples[source].loop_mode, loop_end_offset,
+			remaining_loop, &delta, sbuf, &sbuf_size, dec, total_length, dec_buf);
+		s->shdr[s->num_samples].dwStartloop = s->data_size + sbuf_size;
+		addr_ptr = write_sample_data(addr_ptr, loop_start_offset, sc55_samples[source].loop_mode, loop_end_offset,
+			(loop_end_offset - loop_start_offset) * (sc55_samples[source].loop_mode == 1 ? 2 : 1), &delta, sbuf, &sbuf_size, dec, total_length, dec_buf);
 		s->shdr[s->num_samples].dwEndloop = s->data_size + sbuf_size;
 
 		real_end = s->data_size + 8;
 		// Write a large tail so that the RIAA filter doesn't mis-align the amplitude of loop-ends
-		addr_ptr = write_sample_data(addr_ptr, loop_start, sc55_samples[source].loop_mode, loop_end,
-			MIN_SAMPLE_PAD, &delta, sbuf, &sbuf_size, dec, sample_end);
+		addr_ptr = write_sample_data(addr_ptr, loop_start_offset, sc55_samples[source].loop_mode, loop_end_offset,
+			MIN_SAMPLE_PAD, &delta, sbuf, &sbuf_size, dec, total_length, dec_buf);
 		levels[env_index] = final_level;
 		shapes[env_index] = 4;
 		starts[env_index++] = sbuf_size;
 
 	} else {
 		// Write any remaining data for non-looping samples
-		addr_ptr = write_sample_data(addr_ptr, loop_start, sc55_samples[source].loop_mode, loop_end,
-			sample_end - addr_ptr, &delta, sbuf, &sbuf_size, dec, sample_end);
+		addr_ptr = write_sample_data(addr_ptr, loop_start_offset, sc55_samples[source].loop_mode, loop_end_offset,
+			total_length - addr_ptr, &delta, sbuf, &sbuf_size, dec, total_length, dec_buf);
 		levels[env_index] = final_level;
 		shapes[env_index] = 4;
 		starts[env_index++] = sbuf_size;
 		real_end = sbuf_size;
 	}
+
+	free(dec_buf);
 
 	// Experimental hanubeki
 
@@ -1031,9 +1068,9 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 	bool has_pitch_envelope = (params->p0 != 0.0) || (params->p1 != 0.0) || (params->p2 != 0.0) || (params->p3 != 0.0);
 
 	if (has_pitch_envelope) {
-		loop_start_offset = s->shdr[s->num_samples].dwStartloop - s->shdr[s->num_samples].dwStart - 2;
+		loop_start_offset = s->shdr[s->num_samples].dwStartloop - s->shdr[s->num_samples].dwStart;
 		loop_end_offset = s->shdr[s->num_samples].dwEndloop - s->shdr[s->num_samples].dwStart;
-		size_t min_loop = loop_start_offset + 2;
+		size_t min_loop = loop_start_offset;
 
 		int32_t *pbuf = calloc(360 * 32000, sizeof(int32_t));
 		uint32_t out_pos = 0;
@@ -1052,18 +1089,18 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 			uint32_t loop_modifier = 0;
 
 			// printf("loop_start_offset: %d, loop_end_offset: %d, pitch_terminal: %d, loop_trim: %d\n", loop_start_offset, loop_end_offset, pitch_terminal, loop_trim);
-			while ((loop_start_offset + 2 + loop_modifier) < (pitch_terminal + loop_trim)) {
+			while ((loop_start_offset + loop_modifier) < (pitch_terminal + loop_trim)) {
 				loop_modifier += total_loop_length;
 			}
 
 			if (loop_trim > 0) {
-				while ((loop_start_offset + 2 + loop_modifier) < (min_loop + loop_trim)) {
+				while ((loop_start_offset + loop_modifier) < (min_loop + loop_trim)) {
 					loop_modifier += total_loop_length;
 				}
 			}
 
 			// printf("loop_modifier: %d, total_loop_length: %d\n", loop_modifier, total_loop_length);
-			if (out_pos < (loop_end_offset + 1 + loop_modifier - loop_trim)) {
+			if (out_pos < (loop_end_offset + loop_modifier - loop_trim)) {
 				apply_pitch_envelope(sbuf, pbuf, (loop_end_offset + 1 + loop_modifier - loop_trim) - out_pos, 0.0, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
 			}
 
@@ -1088,9 +1125,9 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 				apply_pitch_envelope(sbuf, pbuf, sbuf_size - floor(sample_pos), 0.0, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
 			}
 
-			loop_start_offset = out_pos - 3;
-			loop_end_offset = out_pos - 1;
-			s->shdr[s->num_samples].dwStartloop = s->shdr[s->num_samples].dwStart + loop_start_offset + 2;
+			loop_start_offset = out_pos;
+			loop_end_offset = out_pos;
+			s->shdr[s->num_samples].dwStartloop = s->shdr[s->num_samples].dwStart + loop_start_offset;
 			s->shdr[s->num_samples].dwEndloop = s->shdr[s->num_samples].dwStart + loop_end_offset;
 		}
 
@@ -1100,9 +1137,9 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 		free(pbuf);
 
 		if (handle_loop) {
-			if (sbuf_size < (loop_end_offset + 1 + MIN_SAMPLE_PAD)) sbuf_size = loop_end_offset + 1 + MIN_SAMPLE_PAD;
+			if (sbuf_size < (loop_end_offset + MIN_SAMPLE_PAD)) sbuf_size = loop_end_offset + MIN_SAMPLE_PAD;
 		} else {
-			if (sbuf_size < loop_end_offset + 1) sbuf_size = loop_end_offset + 1;
+			if (sbuf_size < loop_end_offset) sbuf_size = loop_end_offset;
 		}
 
 		starts[env_index - 1] = sbuf_size;
