@@ -712,7 +712,6 @@ uint32_t apply_riaa_filter(biquad bq, int32_t *sample, size_t len, double vol, u
 	return len;
 }
 
-//FIXME: Unused
 int32_t make_sample(uint8_t *decoded_rom, uint32_t address)
 {
 	int8_t data_byte = decoded_rom[address];
@@ -724,20 +723,25 @@ int32_t make_sample(uint8_t *decoded_rom, uint32_t address)
 	return final;
 }
 
-void decode_dpcm(int32_t *buffer, uint8_t *decoded_rom, uint32_t start, uint32_t length)
+void decode_dpcm(int32_t *buffer, uint8_t *decoded_rom, uint32_t start, uint32_t length, uint32_t loop_length)
 {
 	int32_t sample = 0;
 
-	for (uint32_t i = 0; i < length; i++) {
+	int32_t i = 0;
+	while (i < length) {
 		uint32_t address = start + i;
-		int8_t data_byte = decoded_rom[address];
-		uint8_t shift_byte = decoded_rom[((address & 0xFFFFF) >> 5) | (address & 0xF00000)];
-		uint8_t shift_nibble = (address & 0x10) ? (shift_byte >> 4 ) : (shift_byte & 0x0F);
-		int32_t final = ((data_byte << shift_nibble) << 14); // Shift nibbles thus far never exceed 10, thus 18 bit samples
-		final = final >> 8; // To maintain sign for 24 bit sample
-		sample += final; // Apply DPCM
-
+		sample += make_sample(decoded_rom, address); // Apply DPCM
 		buffer[i] = sample;
+		i++;
+	}
+
+	if (length < loop_length) {
+		while (i < (length + loop_length)) {
+			uint32_t address = start + i - loop_length;
+			sample += make_sample(decoded_rom, address); // Apply DPCM
+			buffer[i] = sample;
+			i++;
+		}
 	}
 }
 
@@ -930,6 +934,21 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 	char sample_name[40] = {0};
 	snprintf(s->shdr[s->num_samples].achSampleName, 20, "SC-55 - %d", source);
 
+	// hanubeki: Sample data is DPCM so decode it first.
+	// printf("sample: %d, address: %d, loop_mode: %d\n", source, address, sc55_samples[source].loop_mode);
+	// printf("loop_start_offset: %d, loop_end_offset: %d, total_length: %d, loop_length: %d\n", loop_start_offset, loop_end_offset, total_length, loop_length);
+	int32_t *dec_buf = calloc(total_length >= loop_length ? total_length : total_length + loop_length, sizeof(int32_t));
+	decode_dpcm(dec_buf, dec, address, total_length, loop_length);
+
+	if (total_length < loop_length) {
+		printf("Sample %d: sample length is smaller than loop length.\n", source);
+		total_length += loop_length;
+		loop_start_offset += loop_length;
+		loop_end_offset += loop_length;
+		loop_start += loop_length;
+		loop_end += loop_length;
+	}
+
 	s->shdr[s->num_samples].byOriginalPitch = sc55_samples[source].root_key;
 	s->shdr[s->num_samples].dwSampleRate = 32000;
 	s->shdr[s->num_samples].sfSampleType = 1;
@@ -938,12 +957,6 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 	s->shdr[s->num_samples].dwStart = s->data_size;
 	s->shdr[s->num_samples].dwStartloop = s->shdr[s->num_samples].dwStart + loop_start_offset;
 	s->shdr[s->num_samples].dwEndloop = s->shdr[s->num_samples].dwStart + loop_end_offset;
-
-	// hanubeki: Sample data is DPCM so decode it first.
-	// printf("sample: %d, address: %d, loop_mode: %d\n", source, address, sc55_samples[source].loop_mode);
-	// printf("loop_start_offset: %d, loop_end_offset: %d, total_length: %d, loop_length: %d\n", loop_start_offset, loop_end_offset, total_length, loop_length);
-	int32_t *dec_buf = calloc(total_length, sizeof(int32_t));
-	decode_dpcm(dec_buf, dec, address, total_length);
 
 	// 30 second buffer size
 	int32_t *sbuf_full = calloc(480 * 32000, sizeof(int32_t));
