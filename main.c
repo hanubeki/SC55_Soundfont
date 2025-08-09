@@ -1690,7 +1690,7 @@ int32_t main (int32_t argc, char **argv)
 	riff_write_chunk(sf2, "ICRD", str_len + ((str_len & 1) ? 1 : 2), str_buf);
 
 	memset(str_buf, 0, sizeof(str_buf));
-	str_len = snprintf(str_buf, 256, "%s", "Kitrinx & NewRisingSun");
+	str_len = snprintf(str_buf, 256, "%s", "Kitrinx & NewRisingSun & hanubeki");
 	riff_write_chunk(sf2, "IENG", str_len + ((str_len & 1) ? 1 : 2), str_buf);
 
 	memset(str_buf, 0, sizeof(str_buf));
