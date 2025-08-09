@@ -79,8 +79,12 @@ uint32_t banks_sc55[8] ={0x10000, 0x1BD00, 0x1DEC0, 0x20000, 0x2BD00, 0x2DEC0, 0
 #endif
 
 #define MAG2DB(x) (-200.0 * log10(x))
-#define SC552AMP(x) (0.1 * pow(2.0, (double)(x) / 36.7111) - 0.1)
+// #define SC552AMP(x) (0.1 * pow(2.0, (double)(x) / 36.7111) - 0.1)
+#define SC552AMP(x) ((pow(11.0, (double)(x) / 127.0) - 1.0) / 10.0)
 #define PCT2VOL(x) ((x) == 127 ? 0 : ((x) > 0 ? MAG2DB(SC552AMP(x)) : 1440))
+#define SC552AMP2(x) ((pow(1001.0, (double)(x) / 127.0) - 1.0) / 1000.0)
+#define PCT2VOL2(x) ((x) == 127 ? 0 : ((x) > 0 ? MAG2DB(SC552AMP2(x)) : 1440))
+// #define AMP2VOL(x) ((x) > 0 ? MAG2DB(x) : 1440)
 
 // 0x3CA48 - 0x70 len settings, 0x700 total
 
@@ -1427,9 +1431,9 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	}
 
 	if (is_drum)
-		add_igen_word(i, sfg_initialAttenuation, round(PCT2VOL(p->pp[pp_part_attenuation] - (0x7f - drum->volume[drum_index])))); // FIXME: drums have volume mod
+		add_igen_word(i, sfg_initialAttenuation, round(PCT2VOL2(p->pp[pp_part_attenuation] - (0x7f - drum->volume[drum_index])))); // FIXME: drums have volume mod
 	else
-		add_igen_word(i, sfg_initialAttenuation, round(PCT2VOL(p->pp[pp_part_attenuation])));
+		add_igen_word(i, sfg_initialAttenuation, round(PCT2VOL2(p->pp[pp_part_attenuation])));
 
 	// --------------------//
 	// Modulator Envelope //
@@ -1746,7 +1750,7 @@ int32_t main (int32_t argc, char **argv)
 				p->pbag[p->pbag_count++].wGenNdx = p->pgen_count;
 
 				p->pgen[p->pgen_count].sfGenOper = sfg_initialAttenuation;
-				p->pgen[p->pgen_count++].genAmount.wAmount = PCT2VOL(ins->header[ih_attenuation]);
+				p->pgen[p->pgen_count++].genAmount.wAmount = PCT2VOL2(ins->header[ih_attenuation]);
 
 /*
 				if (ins->header[ih_panpot]) {
@@ -1815,7 +1819,7 @@ int32_t main (int32_t argc, char **argv)
 
 
 					sf_inst->igen[sf_inst->igen_count].sfGenOper = sfg_initialAttenuation;
-					sf_inst->igen[sf_inst->igen_count++].genAmount.shAmount = PCT2VOL(sc55->drums[x].volume[y]);
+					sf_inst->igen[sf_inst->igen_count++].genAmount.shAmount = PCT2VOL2(sc55->drums[x].volume[y]);
 
 					// double ih_pan = ((double)((sc55->instruments[sc55->drums[x].preset[y]].header[ih_panpot] ? sc55->instruments[sc55->drums[x].preset[y]].header[ih_panpot] : 0x4F) - 0x4F) / 79.0) * 500.0;
 					double drum_pan =((double)((sc55->drums[x].panpot[y] ? sc55->drums[x].panpot[y] : 0x40) - 0x40) / 64.0);
