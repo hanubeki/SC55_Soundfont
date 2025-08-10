@@ -1477,10 +1477,10 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 
 	if(!is_drum) {
 		if (p->pp[pp_panpot])
-			add_igen_short(i, sfg_pan, ((double)(p->pp[pp_panpot] - 0x40) / 64.0) * -500.0);
+			add_igen_short(i, sfg_pan, ((double)(p->pp[pp_panpot] - 0x40) / 64.0) * 500.0);
 	} else {
 		if (drum->panpot[drum_index])
-			add_igen_short(i, sfg_pan, ((double)(drum->panpot[drum_index] - 0x40) / 64.0) * -500.0);
+			add_igen_short(i, sfg_pan, ((double)(drum->panpot[drum_index] - 0x40) / 64.0) * 500.0);
 	}
 
 	add_igen_word(i, sfg_reverbEffectsSend, 70);
@@ -1822,7 +1822,7 @@ int32_t main (int32_t argc, char **argv)
 					sf_inst->igen[sf_inst->igen_count++].genAmount.shAmount = PCT2VOL2(sc55->drums[x].volume[y]);
 
 					// double ih_pan = ((double)((sc55->instruments[sc55->drums[x].preset[y]].header[ih_panpot] ? sc55->instruments[sc55->drums[x].preset[y]].header[ih_panpot] : 0x4F) - 0x4F) / 79.0) * 500.0;
-					double drum_pan =((double)((sc55->drums[x].panpot[y] ? sc55->drums[x].panpot[y] : 0x40) - 0x40) / 64.0);
+					double drum_pan =((double)(0x40 - (sc55->drums[x].panpot[y] ? sc55->drums[x].panpot[y] : 0x40)) / 64.0);
 
 					// drum_pan = ih_pan + drum_pan;
 					if (drum_pan > 1.0)
