@@ -692,7 +692,7 @@ uint32_t apply_riaa_filter(biquad bq, int32_t *sample, size_t len, double vol, u
 		// the percieved volume.
 		// int32_t t_val = compress_sample((conv_buffer2[x] * 4.0L) * attenuate, 16);
 		// int32_t t_val = (int32_t) roundl((conv_buffer2[x] * 4.0L) * attenuate);
-		int32_t t_val = (int32_t) roundl(sample[x] * attenuate);
+		int32_t t_val = (int32_t) roundl(sample[x] * sqrtl(2.0L) * attenuate);
 
 		if (t_val > INT24_MAX) {
 			t_val = INT24_MAX;
