@@ -862,7 +862,7 @@ int32_t sampling(int32_t *src, double position, double pitch, size_t sbuf_size, 
 			}
 			out += (double)src[point] * SINC8P(((double)(start + i) - position) / scale);
 		}
-		return round(out);
+		return round(out / scale);
 	#else
 		int32_t point = floor(position);
 		if (handle_loop) {
