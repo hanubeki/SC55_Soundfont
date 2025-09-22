@@ -1,5 +1,10 @@
 # SC55 to Soundfont Converter
-Written by Kitrinx and NewRisingSun.
+Written by Kitrinx and NewRisingSun, forked by hanubeki.
+
+
+## Fork notice
+This fork is considered "finished."
+Feel free to fork this if you want add something.
 
 
 # Requirements
@@ -41,4 +46,9 @@ There are many known issues as this is a WIP and currently rapidly changing code
 
 # Other Documentation
 There is currently a google spreadsheet [here](https://docs.google.com/spreadsheets/d/13LyKT-0czQfSz1jF42GhiQShXHAfGFzOqpFD5J0UZf0/edit?usp=sharing) in which we are documentating various discoveries of parameters. It's currently unfinished, but may be helpful to others exploring the parameters.
+
+
+# Thanks from hanubeki
+- [EmuSC](https://github.com/skjelten/emusc) for reference
+- [SpessaFont](https://spessasus.github.io/SpessaFont/) for troubleshooting outputs
 
