@@ -757,7 +757,7 @@ uint32_t write_sample_data(uint32_t address, int32_t loop_start, uint32_t loop_m
 		return address;
 	}
 
-	if (length <= 0) {
+	if (length < 0) {
 		printf("Invalid Length %d written\n", length);
 		return address;
 	}
@@ -803,7 +803,11 @@ uint32_t write_sample_data(uint32_t address, int32_t loop_start, uint32_t loop_m
 
 void apply_envelope(int32_t *samples, uint32_t length, double *initial_amplitude, double target_amplitude, uint8_t shape)
 {
-	if (length <= 0) return;
+	if (length < 0) return;
+	if (length == 0) {
+		*initial_amplitude = target_amplitude;
+		return;
+	}
 	double current_amp = *initial_amplitude;
 	int32_t total_length = length;
 	double max_amp = SC552AMP(0X7F);
@@ -1175,6 +1179,8 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 		if (starts[x]) {
 			apply_envelope(&sbuf[last_value], starts[x] - last_value, &initial_amplitude, levels[x], shapes[x]);
 			last_value = starts[x];
+		} else {
+			initial_amplitude = levels[x];
 		}
 	}
 
@@ -1224,7 +1230,8 @@ uint32_t find_or_make_sample(struct sf_samples *s, struct sample *sc55_samples, 
 }
 
 #define SEC2SF(x) ((x) ? 1200.0 * log2(x) : INT16_MIN)
-#define CONV_VALUE(x) ((pow(2.0, (double)(x & 0x7F) / 18.0) / 5.45 - 0.183))
+// #define CONV_VALUE(x) ((pow(2.0, (double)(x & 0x7F) / 18.0) / 5.45 - 0.183))
+#define CONV_VALUE(x) (((pow(101.0, (double)(x & 0x7F) / 127.0) - 1.0) / 100.0) * 20.0)
 
 void add_igen_short(struct sf_instruments *i, uint16_t operator, int32_t value)
 {
