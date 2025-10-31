@@ -1232,6 +1232,8 @@ uint32_t find_or_make_sample(struct sf_samples *s, struct sample *sc55_samples, 
 #define SEC2SF(x) ((x) ? 1200.0 * log2(x) : INT16_MIN)
 // #define CONV_VALUE(x) ((pow(2.0, (double)(x & 0x7F) / 18.0) / 5.45 - 0.183))
 #define CONV_VALUE(x) (((pow(101.0, (double)(x & 0x7F) / 127.0) - 1.0) / 100.0) * 20.0)
+#define LFODELAY2SEC(x) (((pow(11.0, (double)(x & 0x7F) / 127.0) - 1.0) / 10.0) * 4.0)
+#define LFOFADE2SEC(x) (((pow(11.0, (double)(x & 0x7F) / 127.0) - 1.0) / 10.0) * 1.0)
 
 void add_igen_short(struct sf_instruments *i, uint16_t operator, int32_t value)
 {
@@ -1502,17 +1504,25 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 
 	add_igen_word(i, sfg_reverbEffectsSend, 70);
 
-	// if (p->pp[pp_vibrato_depth]) { //FIXME: Find scales
-	// 	add_igen_word(i, sfg_vibLfoToPitch, PCT2VOL(0x7F - (p->pp[pp_vibrato_depth] & 0x7F)));
-	// 	//add_igen_word(i, sfg_delayVibLFO, SEC2SF(CONV_VALUE(p->pp[11])));
-	// 	//add_igen_short(i, sfg_freqVibLFO, (double)(p->pp[55] - 0x40) * 100.0);
-	// }
+	if (p->pp[pp_vibrato_depth] || p->pp[11]) { //FIXME: Find scales
+		//add_imod(i, 0x0081, 0, sfg_vibLfoToVolume, PCT2VOL(0x7F - (p->pp[pp_vibrato_depth] & 0x7F)), 0);
+		add_imod(i, 0x0081, 0, sfg_vibLfoToPitch, p->pp[11], 0);
+		add_igen_short(i, sfg_delayVibLFO, SEC2SF(LFODELAY2SEC(p->pp[2]) + LFOFADE2SEC(p->pp[3])));
+		add_igen_short(i, sfg_freqVibLFO, HZ2CENT((double)(p->pp[1]) * 0.1));
+	} else {
+		//add_imod(i, 0x0081, 0, sfg_vibLfoToVolume, 0, 0);
+		add_imod(i, 0x0081, 0, sfg_vibLfoToPitch, 0, 0);
+	}
 
-	// if (p->pp[pp_lfo_depth]) { //FIXME: Find scales
-	// 	add_igen_word(i, sfg_modLfoToVolume, PCT2VOL(0x7F - (p->pp[pp_lfo_depth] & 0x7F)));
-	// 	//add_igen_word(i, sfg_delayModLFO, SEC2SF(CONV_VALUE(p->pp[69])));
-	// 	//add_igen_short(i, sfg_freqModLFO, (double)(p->pp[56] - 0x40) * 100);
-	// }
+	if (p->pp[pp_lfo_depth] || p->pp[10]) { //FIXME: Find scales
+		add_imod(i, 0x0081, 0, sfg_modLfoToVolume, PCT2VOL(0x7F - (p->pp[pp_lfo_depth] & 0x7F)), 0);
+		add_imod(i, 0x0081, 0, sfg_modLfoToPitch, p->pp[10], 0);
+		add_igen_short(i, sfg_delayModLFO, SEC2SF(LFODELAY2SEC(inst->header[4]) + LFOFADE2SEC(inst->header[5])));
+		add_igen_short(i, sfg_freqModLFO, HZ2CENT((double)(inst->header[3]) * 0.1));
+	} else {
+		add_imod(i, 0x0081, 0, sfg_modLfoToVolume, 0, 0);
+		add_imod(i, 0x0081, 0, sfg_modLfoToPitch, 0, 0);
+	}
 
 	if (!is_drum) {
 		add_igen_word(i, sfg_keynumToVolEnvDecay, 0);
