@@ -1433,14 +1433,14 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 */
 
 	if (is_drum)
-		add_imod(i, 0x00DB, 0, 0x0010, ((double)drum->reverb[drum_index]/ 127.0) * 300, 0);
+		add_imod(i, 0x00DB, 0, 0x0010, ((double)drum->reverb[drum_index]/ 127.0) * 500, 0);
 	else
-		add_imod(i, 0x00DB, 0, 0x0010, 300, 0);
+		add_imod(i, 0x00DB, 0, 0x0010, 500, 0);
 
 	if (is_drum)
-		add_imod(i, 0x00DD, 0, 0x000F, ((double)drum->chorus[drum_index]/ 127.0) * 300, 0);
+		add_imod(i, 0x00DD, 0, 0x000F, ((double)drum->chorus[drum_index]/ 127.0) * 500, 0);
 	else
-		add_imod(i, 0x00DD, 0, 0x000F, 300, 0);
+		add_imod(i, 0x00DD, 0, 0x000F, 500, 0);
 
 	if(max_sustain) {
 		add_igen_word(i, sfg_sustainVolEnv, 1440);
