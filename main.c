@@ -1879,7 +1879,7 @@ int32_t main (int32_t argc, char **argv)
 		}
 	}
 
-	uint8_t drum_banks[NUM_DRUMS] = {0, 8, 16, 24, 25, 32, 40, 48, 56, 57, 58, 59, 60, 127};
+	uint8_t drum_banks[NUM_DRUMS] = {0, 8, 16, 24, 25, 32, 40, 48, 56, 96, 97, 98, 99, 127};
 	for (int32_t x = 0; x < NUM_DRUMS; x++) {
 		p->phdr[p->phdr_count].wPreset = drum_banks[x];
 		p->phdr[p->phdr_count].wBank = 128;
