@@ -1471,20 +1471,25 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	add_igen_word(i, sfg_decayModEnv, SEC2SF(decay_mod));
 	add_igen_word(i, sfg_releaseModEnv, SEC2SF(release_mod));
 
-	double base_filter = SC552HZ(p->pp[40]);
-	double initial_filter = (((double)(p->pp[41]) / 127.0) * base_filter);
-	double terminal_filter = (((double)(p->pp[45]) / 127.0) * base_filter);
-	double sustain_filter = (1.0 - (terminal_filter / base_filter) * 1000.0);
+	double base_filter = (double)p->pp[40] * 24.0 / 8000.0;
+	double initial_filter = (double)(p->pp[41] - 64) * base_filter;
+	double terminal_filter = (double)(p->pp[45] - 64) * base_filter;
+	double sustain_filter = (double)(p->pp[44] - 64) * base_filter;
+	double sustain_value = (terminal_filter == initial_filter) ? 1.0 : (sustain_filter - terminal_filter) / (initial_filter - terminal_filter);
 
-	if (p->pp[40]) {
-		add_igen_short(i, sfg_modEnvToFilterFc, HZ2CENT(initial_filter)); // Number in Cents, can be negative
-		add_igen_word(i, sfg_sustainModEnv, sustain_filter); // Number in 0.1% units
-		add_igen_word(i, sfg_initialFilterFc, 0); // Number in Cents
+	if (p->pp[35] == 0) {
+		add_igen_short(i, sfg_modEnvToFilterFc, round((initial_filter - terminal_filter) * 100)); // Number in Cents, can be negative
+		add_igen_word(i, sfg_sustainModEnv, 1000 - round(sustain_value * 1000.0)); // Number in 0.1% units
+		add_igen_word(i, sfg_initialFilterFc, round(((double)p->pp[33] + 36 + terminal_filter) * 100)); // Number in Cents
 	}
 
-	// if (p->pp[34]) {
-	// 	add_igen_word(i, sfg_initialFilterQ, HZ2CENT(base filter - SC552HZ(p->pp[34])));
-	// }
+	if (p->pp[34]) {
+		add_igen_word(i, sfg_initialFilterQ, round((double)(127 - p->pp[34]) * 12.0 / 12.7));
+	}
+
+	if (p->pp[57]) {
+		add_imod(i, 0x0102, 0, sfg_initialFilterFc, -(p->pp[57] - 64) * 127, 0);
+	}
 	*/
 
 	//---------------//
