@@ -70,7 +70,7 @@ uint32_t banks_sc55[8] ={0x10000, 0x1BD00, 0x1DEC0, 0x20000, 0x2BD00, 0x2DEC0, 0
 #define INT24_MIN (0x7FFFFF * -1)
 #define BOOST_AMOUNT 0.0
 
-//#define MKII
+#define MKII
 
 #if defined(MKII)
 	#define CTRL_VER_ADDR 0x3D148
@@ -1471,7 +1471,7 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	add_igen_word(i, sfg_decayModEnv, SEC2SF(decay_mod));
 	add_igen_word(i, sfg_releaseModEnv, SEC2SF(release_mod));
 
-	double base_filter = (double)p->pp[40] * 24.0 / 8000.0;
+	double base_filter = (double)p->pp[40] / 127.0;
 	double initial_filter = (double)(p->pp[41] - 64) * base_filter;
 	double terminal_filter = (double)(p->pp[45] - 64) * base_filter;
 	double sustain_filter = (double)(p->pp[44] - 64) * base_filter;
@@ -1480,14 +1480,14 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	if (p->pp[35] == 0) {
 		add_igen_short(i, sfg_modEnvToFilterFc, round((initial_filter - terminal_filter) * 100)); // Number in Cents, can be negative
 		add_igen_word(i, sfg_sustainModEnv, 1000 - round(sustain_value * 1000.0)); // Number in 0.1% units
-		add_igen_word(i, sfg_initialFilterFc, round(((double)p->pp[33] + 36 + terminal_filter) * 100)); // Number in Cents
+		add_igen_word(i, sfg_initialFilterFc, round(((double)p->pp[33] + 24 + terminal_filter) * 100)); // Number in Cents
 	}
 
 	if (p->pp[34]) {
 		add_igen_word(i, sfg_initialFilterQ, round((double)(127 - p->pp[34]) * 12.0 / 12.7));
 	}
 
-	if (p->pp[57]) {
+	if (p->pp[57] != 64) {
 		add_imod(i, 0x0102, 0, sfg_initialFilterFc, -(p->pp[57] - 64) * 127, 0);
 	}
 	*/
@@ -1579,6 +1579,8 @@ uint32_t add_instrument(struct synth *sc55, struct sf_samples *s, uint32_t part_
 		i->ibag_count++;
 
 		while (last_value < 0x7F) {
+			bool breaknext = false;
+
 			if (part->samples[y] >= NUM_SAMPLES) {
 				//igen[igen_count-2].genAmount.ranges.byHi = 0x7F; //Correct?
 				break;
@@ -1588,6 +1590,17 @@ uint32_t add_instrument(struct synth *sc55, struct sf_samples *s, uint32_t part_
 			i->ibag[i->ibag_count++].wInstGenNdx = i->igen_count;
 
 			uint8_t breaks = part->breaks[y] >= 95 ? 127 : part->breaks[y]; // FIXME: Fantasia and Crystal use wrong sample for note 96+
+
+			if (partial->pp[36] == 1 && partial->pp[37] != 64 && (last_value < 60 && breaks >= 60)) {
+				breaks = 60;
+				breaknext = true;
+			}
+
+			if (partial->pp[36] >= 2 && partial->pp[37] != 64 && (last_value < 96 && breaks >= 96)) {
+				breaks = 96;
+				breaknext = true;
+			}
+
 			i->igen[i->igen_count].sfGenOper = sfg_keyRange;
 			i->igen[i->igen_count].genAmount.ranges.byLo = last_value ? last_value + 1 : 0;
 			i->igen[i->igen_count++].genAmount.ranges.byHi = breaks;
@@ -1602,7 +1615,71 @@ uint32_t add_instrument(struct synth *sc55, struct sf_samples *s, uint32_t part_
 			i->igen[i->igen_count].sfGenOper = sfg_sampleID;
 			i->igen[i->igen_count++].genAmount.wAmount = find_or_make_sample(s, sc55->samples, sc55->wave_data, part->samples[y], &params);
 
-			y++;
+			/*
+			if (partial->pp[37] != 64) {
+				if (partial->pp[36] == 0) {
+					// printf("adding modulator for %s\n", name);
+					i->imod[i->imod_count].sfModSrcOper = 0x0000;
+					i->imod[i->imod_count].sfModTransOper = 0;
+					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
+					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * -600;
+					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
+
+					i->imod[i->imod_count].sfModSrcOper = 0x0003;
+					i->imod[i->imod_count].sfModTransOper = 0;
+					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
+					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 1270;
+					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
+				}
+
+				if (partial->pp[36] == 1 && breaks > 60) {
+					// printf("adding modulator for %s\n", name);
+					i->imod[i->imod_count].sfModSrcOper = 0x0000;
+					i->imod[i->imod_count].sfModTransOper = 0;
+					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
+					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 600;
+					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
+
+					i->imod[i->imod_count].sfModSrcOper = 0x0003;
+					i->imod[i->imod_count].sfModTransOper = 0;
+					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
+					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * -1270;
+					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
+				}
+
+				if (partial->pp[36] == 2 && breaks > 96) {
+					// printf("adding modulator for %s\n", name);
+					i->imod[i->imod_count].sfModSrcOper = 0x0000;
+					i->imod[i->imod_count].sfModTransOper = 0;
+					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
+					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 960;
+					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
+
+					i->imod[i->imod_count].sfModSrcOper = 0x0003;
+					i->imod[i->imod_count].sfModTransOper = 0;
+					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
+					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * -1270;
+					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
+				}
+
+				if (partial->pp[36] == 3 && breaks <= 96) {
+					// printf("adding modulator for %s\n", name);
+					i->imod[i->imod_count].sfModSrcOper = 0x0000;
+					i->imod[i->imod_count].sfModTransOper = 0;
+					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
+					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * -960;
+					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
+
+					i->imod[i->imod_count].sfModSrcOper = 0x0003;
+					i->imod[i->imod_count].sfModTransOper = 0;
+					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
+					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 1270;
+					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
+				}
+			}
+			*/
+
+			if (!breaknext) y++;
 		}
 		return i->inst_count++;
 	} else {
