@@ -1498,6 +1498,7 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 
 	add_igen_short(i, sfg_coarseTune, p->pp[pp_course_pitch] - 0x40);
 	add_igen_short(i, sfg_fineTune, round((double)(p->pp[pp_fine_pitch] - 0x40)));
+	add_igen_short(i, sfg_scaleTuning, (p->pp[9] - 64) * 10);
 
 	if(!is_drum) {
 		if (p->pp[pp_panpot])
