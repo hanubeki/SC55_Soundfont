@@ -1339,7 +1339,7 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 		params->terminal_phase = 5;
 	}
 
-	double p_depth = (double)p->pp[12] * 0.18;
+	double p_depth = (double)p->pp[12] * 0.3;
 
 	params->p0 = ((double)p->pp[14] - 64.0) * p_depth;
 	params->p1 = ((double)p->pp[15] - 64.0) * p_depth;
