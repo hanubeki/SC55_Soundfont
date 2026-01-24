@@ -1484,7 +1484,7 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	}
 
 	if (p->pp[34]) {
-		add_igen_word(i, sfg_initialFilterQ, round((double)p->pp[34] * 12.0 / 12.7));
+		add_igen_word(i, sfg_initialFilterQ, round(pow((double)p->pp[34] / 127.0, 2.0) * 120));
 	}
 
 	if (p->pp[57] != 64) {
