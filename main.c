@@ -1901,6 +1901,7 @@ int32_t main (int32_t argc, char **argv)
 	// Deal with goofy drum bank conversion
 	uint32_t drum_start = sf_inst->inst_count;
 	for (int32_t x = 0; x < NUM_DRUMS; x++) {
+		if (x >= 9 && x <= 12) continue;
 		clean_name(sc55->drums[x].name, sf_inst->inst[sf_inst->inst_count].achInstName);
 		printf("Adding %s at %d\n", sf_inst->inst[sf_inst->inst_count].achInstName, sf_inst->inst_count);
 		sf_inst->inst[sf_inst->inst_count++].wInstBagNdx = sf_inst->ibag_count;
@@ -1964,6 +1965,7 @@ int32_t main (int32_t argc, char **argv)
 
 	uint8_t drum_banks[NUM_DRUMS] = {0, 8, 16, 24, 25, 32, 40, 48, 56, 96, 97, 98, 99, 127};
 	for (int32_t x = 0; x < NUM_DRUMS; x++) {
+		if (x >= 9 && x <= 12) continue;
 		p->phdr[p->phdr_count].wPreset = drum_banks[x];
 		p->phdr[p->phdr_count].wBank = 128;
 		p->phdr[p->phdr_count].wPresetBagNdx = p->pbag_count;
@@ -1972,11 +1974,11 @@ int32_t main (int32_t argc, char **argv)
 		p->phdr[p->phdr_count].dwMorphology = p->pbag_count;
 
 		clean_name(sc55->drums[x].name, p->phdr[p->phdr_count].achPresetName);
-		printf("Adding bag for %s %d\n", p->phdr[p->phdr_count].achPresetName, drum_start + x);
+		printf("Adding bag for %s %d\n", p->phdr[p->phdr_count].achPresetName, drum_start + ((x == 13) ? 9 : x));
 		p->pbag[p->pbag_count++].wGenNdx = p->pgen_count;
 
 		p->pgen[p->pgen_count].sfGenOper = 41;
-		p->pgen[p->pgen_count++].genAmount.wAmount = drum_start + x;
+		p->pgen[p->pgen_count++].genAmount.wAmount = drum_start + ((x == 13) ? 9 : x);
 
 		p->phdr_count++;
 	}
