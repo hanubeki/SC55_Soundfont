@@ -215,6 +215,8 @@ typedef struct sample_params {
 	double d3;
 	double d4;
 	// double d5;
+	double f14;
+	// double f5;
 } sample_params;
 
 packed_struct sample_record {
@@ -1085,7 +1087,7 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 			break;
 	}
 
-	// Pitch envelope; release envelope, key follow and velocity follow are not supported
+	// Pitch envelope; release envelope and velocity follow are not supported
 	bool has_pitch_envelope = (params->p0 != 0.0) || (params->p1 != 0.0) || (params->p2 != 0.0) || (params->p3 != 0.0);
 
 	if (has_pitch_envelope) {
@@ -1099,10 +1101,10 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 		bool handle_loop = sc55_samples[source].loop_mode != 2;
 		uint32_t total_loop_length = (loop_end - loop_start) * (sc55_samples[source].loop_mode == 1 ? 2 : 1);
 
-		apply_pitch_envelope(sbuf, pbuf, TIME2SAMP(params->d1), params->p0, params->p1, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
-		apply_pitch_envelope(sbuf, pbuf, TIME2SAMP(params->d2), params->p1, params->p2, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
-		apply_pitch_envelope(sbuf, pbuf, TIME2SAMP(params->d3), params->p2, params->p3, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
-		apply_pitch_envelope(sbuf, pbuf, TIME2SAMP(params->d4), params->p3, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
+		apply_pitch_envelope(sbuf, pbuf, TIME2SAMP(params->d1 * pow(params->f14, (double)(s->shdr[s->num_samples].byOriginalPitch - 64) / 12.0)), params->p0, params->p1, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
+		apply_pitch_envelope(sbuf, pbuf, TIME2SAMP(params->d2 * pow(params->f14, (double)(s->shdr[s->num_samples].byOriginalPitch - 64) / 12.0)), params->p1, params->p2, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
+		apply_pitch_envelope(sbuf, pbuf, TIME2SAMP(params->d3 * pow(params->f14, (double)(s->shdr[s->num_samples].byOriginalPitch - 64) / 12.0)), params->p2, params->p3, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
+		apply_pitch_envelope(sbuf, pbuf, TIME2SAMP(params->d4 * pow(params->f14, (double)(s->shdr[s->num_samples].byOriginalPitch - 64) / 12.0)), params->p3, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
 
 		if (handle_loop) {
 			uint32_t pitch_terminal = out_pos;
@@ -1352,6 +1354,9 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	params->d3 = CONV_VALUE(p->pp[21]);
 	params->d4 = CONV_VALUE(p->pp[22]);
 	// params->d5 = CONV_VALUE(p->pp[23]);
+
+	params->f14 = pow(2.0, (double)(p->pp[28] - 64) / 10.0);
+	// params->f5 = pow(2.0, (double)(p->pp[29] - 64) / 10.0);
 
 	char name[20];
 	clean_name(inst->name, name);
