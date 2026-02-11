@@ -777,6 +777,10 @@ uint32_t write_sample_data(uint32_t address, int32_t loop_start, uint32_t loop_m
 		case 1:
 			while (length--) {
 				samples[*data_size] = dbuf[address] * (*delta);
+				if (*delta < 0) {
+					samples[*data_size] += dbuf[loop_end - 1] * 2;
+					samples[*data_size] += dbuf[address] - ((address > 0) ? dbuf[address - 1] : 0);
+				}
 				*data_size = *data_size + 1;
 				if (address == loop_end - 1 && *delta > 0) {
 					*delta = -1;
