@@ -50,5 +50,5 @@ There is currently a google spreadsheet [here](https://docs.google.com/spreadshe
 
 # Thanks from hanubeki
 - [EmuSC](https://github.com/skjelten/emusc) for reference
+- [SoundFont® Technical Specification](https://www.synthfont.com/SFSPEC21.PDF)
 - [SpessaFont](https://spessasus.github.io/SpessaFont/) for troubleshooting outputs
-
