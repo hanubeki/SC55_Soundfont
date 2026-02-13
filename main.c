@@ -1619,12 +1619,12 @@ uint32_t add_instrument(struct synth *sc55, struct sf_samples *s, uint32_t part_
 
 			uint8_t breaks = part->breaks[y] >= 95 ? 127 : part->breaks[y]; // FIXME: Fantasia and Crystal use wrong sample for note 96+
 
-			if (partial->pp[36] == 1 && partial->pp[37] != 64 && (last_value < 60 && breaks >= 60)) {
+			if (partial->pp[36] == 1 && partial->pp[37] != 64 && (last_value < 60 && breaks > 60)) {
 				breaks = 60;
 				breaknext = true;
 			}
 
-			if (partial->pp[36] >= 2 && partial->pp[37] != 64 && (last_value < 96 && breaks >= 96)) {
+			if (partial->pp[36] >= 2 && partial->pp[37] != 64 && (last_value < 96 && breaks > 96)) {
 				breaks = 96;
 				breaknext = true;
 			}
