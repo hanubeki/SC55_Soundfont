@@ -1330,8 +1330,8 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	params->s4 = (p->pp[pp_tva_p4_len] & 0x80) ? 0 : 1;
 	params->s5 = (p->pp[pp_tva_p5_len] & 0x80) ? 0 : 1;
 
-	params->tf14 = pow(2.0, ((double)p->pp[83] - 64.0) / 10.0);
-	params->tf5 = pow(2.0, ((double)p->pp[84] - 64.0) / 10.0);
+	params->tf14 = pow(2.0, ((double)p->pp[83] - 64.0) / 20.0);
+	params->tf5 = pow(2.0, ((double)p->pp[84] - 64.0) / 20.0);
 
 	// uint8_t terminal_atten = 0x7F;
 	double terminal_vol = 1.0;
@@ -1364,8 +1364,8 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	params->d4 = CONV_VALUE(p->pp[22]);
 	// params->d5 = CONV_VALUE(p->pp[23]);
 
-	params->df14 = pow(2.0, ((double)p->pp[28] - 64.0) / 10.0);
-	// params->df5 = pow(2.0, ((double)p->pp[29] - 64.0) / 10.0);
+	params->df14 = pow(2.0, ((double)p->pp[28] - 64.0) / 20.0);
+	// params->df5 = pow(2.0, ((double)p->pp[29] - 64.0) / 20.0);
 
 	char name[20];
 	clean_name(inst->name, name);
