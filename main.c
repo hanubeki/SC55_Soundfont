@@ -204,6 +204,8 @@ typedef struct sample_params {
 	uint8_t s3;
 	uint8_t s4;
 	uint8_t s5;
+	double tf14;
+	double tf5;
 	uint32_t terminal_phase; // The phase that reaches the terminal level
 	double p0; // Pitch envelope
 	double p1;
@@ -215,8 +217,8 @@ typedef struct sample_params {
 	double d3;
 	double d4;
 	// double d5;
-	double f14;
-	// double f5;
+	double df14;
+	// double df5;
 } sample_params;
 
 packed_struct sample_record {
@@ -996,7 +998,7 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 	double initial_amplitude = 0.000001;
 	// Phase 1 (Attack)
 	addr_ptr = write_sample_data(addr_ptr, loop_start_offset, sc55_samples[source].loop_mode, loop_end_offset,
-		TIME2SAMP(params->t1), &delta, sbuf, &sbuf_size, dec, total_length, dec_buf);
+		TIME2SAMP(params->t1 * pow(params->tf14, ((double)s->shdr[s->num_samples].byOriginalPitch - 64.0) / 12.0)), &delta, sbuf, &sbuf_size, dec, total_length, dec_buf);
 	levels[env_index] = params->l1;
 	shapes[env_index] = params->s1;
 	starts[env_index++] = sbuf_size;
@@ -1004,7 +1006,7 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 	// Phase 2
 	if (params->terminal_phase > 2) {
 		addr_ptr = write_sample_data(addr_ptr, loop_start_offset, sc55_samples[source].loop_mode, loop_end_offset,
-			TIME2SAMP(params->t2), &delta, sbuf, &sbuf_size, dec, total_length, dec_buf);
+			TIME2SAMP(params->t2 * pow(params->tf14, ((double)s->shdr[s->num_samples].byOriginalPitch - 64.0) / 12.0)), &delta, sbuf, &sbuf_size, dec, total_length, dec_buf);
 		levels[env_index] = params->l2;
 		shapes[env_index] = params->s2;
 		starts[env_index++] = sbuf_size;
@@ -1013,7 +1015,7 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 	// Phase 3
 	if (params->terminal_phase > 3) {
 		addr_ptr = write_sample_data(addr_ptr, loop_start_offset, sc55_samples[source].loop_mode, loop_end_offset,
-			TIME2SAMP(params->t3), &delta, sbuf, &sbuf_size, dec, total_length, dec_buf);
+			TIME2SAMP(params->t3 * pow(params->tf14, ((double)s->shdr[s->num_samples].byOriginalPitch - 64.0) / 12.0)), &delta, sbuf, &sbuf_size, dec, total_length, dec_buf);
 		levels[env_index] = params->l3;
 		shapes[env_index] = params->s3;
 		starts[env_index++] = sbuf_size;
@@ -1022,7 +1024,7 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 	// Phase 4
 	if (params->terminal_phase > 4) {
 		addr_ptr = write_sample_data(addr_ptr, loop_start_offset, sc55_samples[source].loop_mode, loop_end_offset,
-			TIME2SAMP(params->t4), &delta, sbuf, &sbuf_size, dec, total_length, dec_buf);
+			TIME2SAMP(params->t4 * pow(params->tf14, (double)(s->shdr[s->num_samples].byOriginalPitch - 64.0) / 12.0)), &delta, sbuf, &sbuf_size, dec, total_length, dec_buf);
 		levels[env_index] = params->l4;
 		shapes[env_index] = params->s4;
 		starts[env_index++] = sbuf_size;
@@ -1105,10 +1107,10 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 		bool handle_loop = sc55_samples[source].loop_mode != 2;
 		uint32_t total_loop_length = (loop_end - loop_start) * (sc55_samples[source].loop_mode == 1 ? 2 : 1);
 
-		apply_pitch_envelope(sbuf, pbuf, TIME2SAMP(params->d1 * pow(params->f14, (double)(s->shdr[s->num_samples].byOriginalPitch - 64) / 12.0)), params->p0, params->p1, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
-		apply_pitch_envelope(sbuf, pbuf, TIME2SAMP(params->d2 * pow(params->f14, (double)(s->shdr[s->num_samples].byOriginalPitch - 64) / 12.0)), params->p1, params->p2, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
-		apply_pitch_envelope(sbuf, pbuf, TIME2SAMP(params->d3 * pow(params->f14, (double)(s->shdr[s->num_samples].byOriginalPitch - 64) / 12.0)), params->p2, params->p3, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
-		apply_pitch_envelope(sbuf, pbuf, TIME2SAMP(params->d4 * pow(params->f14, (double)(s->shdr[s->num_samples].byOriginalPitch - 64) / 12.0)), params->p3, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
+		apply_pitch_envelope(sbuf, pbuf, TIME2SAMP(params->d1 * pow(params->df14, ((double)s->shdr[s->num_samples].byOriginalPitch - 64.0) / 12.0)), params->p0, params->p1, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
+		apply_pitch_envelope(sbuf, pbuf, TIME2SAMP(params->d2 * pow(params->df14, ((double)s->shdr[s->num_samples].byOriginalPitch - 64.0) / 12.0)), params->p1, params->p2, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
+		apply_pitch_envelope(sbuf, pbuf, TIME2SAMP(params->d3 * pow(params->df14, ((double)s->shdr[s->num_samples].byOriginalPitch - 64.0) / 12.0)), params->p2, params->p3, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
+		apply_pitch_envelope(sbuf, pbuf, TIME2SAMP(params->d4 * pow(params->df14, ((double)s->shdr[s->num_samples].byOriginalPitch - 64.0) / 12.0)), params->p3, 0.0, &out_pos, &sample_pos, 360 * 32000, handle_loop, loop_end_offset, total_loop_length);
 
 		if (handle_loop) {
 			uint32_t pitch_terminal = out_pos;
@@ -1328,6 +1330,9 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	params->s4 = (p->pp[pp_tva_p4_len] & 0x80) ? 0 : 1;
 	params->s5 = (p->pp[pp_tva_p5_len] & 0x80) ? 0 : 1;
 
+	params->tf14 = pow(2.0, ((double)p->pp[83] - 64.0) / 10.0);
+	params->tf5 = pow(2.0, ((double)p->pp[84] - 64.0) / 10.0);
+
 	// uint8_t terminal_atten = 0x7F;
 	double terminal_vol = 1.0;
 
@@ -1359,8 +1364,8 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	params->d4 = CONV_VALUE(p->pp[22]);
 	// params->d5 = CONV_VALUE(p->pp[23]);
 
-	params->f14 = pow(2.0, (double)(p->pp[28] - 64) / 10.0);
-	// params->f5 = pow(2.0, (double)(p->pp[29] - 64) / 10.0);
+	params->df14 = pow(2.0, ((double)p->pp[28] - 64.0) / 10.0);
+	// params->df5 = pow(2.0, ((double)p->pp[29] - 64.0) / 10.0);
 
 	char name[20];
 	clean_name(inst->name, name);
@@ -1424,10 +1429,16 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 		release = p5_val;
 	}
 
-	add_igen_word(i, sfg_releaseVolEnv, release ? SEC2SF(release) : INT16_MIN);
-	add_igen_word(i, sfg_holdVolEnv, hold ? SEC2SF(hold) : INT16_MIN);
-	add_igen_word(i, sfg_decayVolEnv, decay ? SEC2SF(decay) : INT16_MIN);
+	add_igen_short(i, sfg_releaseVolEnv, release ? SEC2SF(release) : INT16_MIN);
+	add_igen_short(i, sfg_holdVolEnv, hold ? (SEC2SF(hold) - ((p->pp[83] - 64) * 20)) : INT16_MIN);
+	add_igen_short(i, sfg_decayVolEnv, decay ? (SEC2SF(decay) - ((p->pp[83] - 64) * 20)) : INT16_MIN);
 
+	add_igen_short(i, sfg_keynumToVolEnvHold, (p->pp[83] - 64) * 5);
+	add_igen_short(i, sfg_keynumToVolEnvDecay, (p->pp[83] - 64) * 5);
+
+	// Some implementations don't support this
+	add_imod(i, 0x0000, 0, sfg_releaseVolEnv, (p->pp[84] - 64) * -320, 0);
+	add_imod(i, 0x0003, 0, sfg_releaseVolEnv, (p->pp[84] - 64) * 635, 0);
 
 /*
 	if (is_drum)
@@ -1475,15 +1486,22 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	double decay_mod = CONV_VALUE(p->pp[48]) + CONV_VALUE(p->pp[49]) + hold_mod;
 	double release_mod = CONV_VALUE(p->pp[50]);
 
-	add_igen_word(i, sfg_attackModEnv, SEC2SF(attack_mod));
-	//add_igen_word(i, sfg_holdModEnv, SEC2SF(hold_mod));
-	add_igen_word(i, sfg_decayModEnv, SEC2SF(decay_mod));
-	add_igen_word(i, sfg_releaseModEnv, SEC2SF(release_mod));
+	add_igen_short(i, sfg_attackModEnv, (SEC2SF(attack_mod) - ((p->pp[55] - 64) * 20)));
+	//add_igen_short(i, sfg_holdModEnv, (SEC2SF(hold_mod) - ((p->pp[55] - 64) * 20)));
+	add_igen_short(i, sfg_decayModEnv, (SEC2SF(decay_mod) - ((p->pp[55] - 64) * 20)));
+	add_igen_short(i, sfg_releaseModEnv, SEC2SF(release_mod));
+
+	add_igen_short(i, sfg_keynumToModEnvHold, (p->pp[55] - 64) * 5);
+	add_igen_short(i, sfg_keynumToModEnvDecay, (p->pp[55] - 64) * 5);
+
+	// Some implementations don't support this
+	add_imod(i, 0x0000, 0, sfg_releaseModEnv, (p->pp[56] - 64) * -320, 0);
+	add_imod(i, 0x0003, 0, sfg_releaseModEnv, (p->pp[56] - 64) * 635, 0);
 
 	double base_filter = (double)p->pp[40] / 127.0;
-	double initial_filter = (double)(p->pp[41] - 64) * base_filter;
-	double terminal_filter = (double)(p->pp[45] - 64) * base_filter;
-	double sustain_filter = (double)(p->pp[44] - 64) * base_filter;
+	double initial_filter = ((double)p->pp[41] - 64.0) * base_filter;
+	double terminal_filter = ((double)p->pp[45] - 64.0) * base_filter;
+	double sustain_filter = ((double)p->pp[44] - 64.0) * base_filter;
 	double sustain_value = (terminal_filter == initial_filter) ? 1.0 : (sustain_filter - terminal_filter) / (initial_filter - terminal_filter);
 
 	if (p->pp[35] == 0) {
