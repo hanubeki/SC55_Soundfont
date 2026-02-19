@@ -3,8 +3,8 @@ Written by Kitrinx and NewRisingSun, forked by hanubeki.
 
 
 ## Fork notice: I'm done, I think gm.dls is better.
-This fork is considered "finished."
-Feel free to fork this if you want add something.
+This fork is considered as "finished."
+Feel free to fork this if you want to add something.
 
 
 # Requirements

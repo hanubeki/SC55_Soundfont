@@ -88,6 +88,7 @@ uint32_t banks_sc55[8] ={0x10000, 0x1BD00, 0x1DEC0, 0x20000, 0x2BD00, 0x2DEC0, 0
 
 // 0x3CA48 - 0x70 len settings, 0x700 total
 
+//FIXME: unused
 int32_t compress_sample(long double sample, long double value)
 {
 	long double comp_f2 = value;
@@ -204,20 +205,20 @@ typedef struct sample_params {
 	uint8_t s3;
 	uint8_t s4;
 	uint8_t s5;
-	double tf14;
+	double tf14; // Amplitude envelope time key follow
 	double tf5;
 	uint32_t terminal_phase; // The phase that reaches the terminal level
-	double p0; // Pitch envelope
+	double p0; // Pitch envelope value
 	double p1;
 	double p2;
 	double p3;
 	// double p5;
-	double d1;
+	double d1; // Pitch envelope time
 	double d2;
 	double d3;
 	double d4;
 	// double d5;
-	double df14;
+	double df14; // Pitch envelope time key follow
 	// double df5;
 } sample_params;
 
@@ -1331,6 +1332,7 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	params->s4 = (p->pp[pp_tva_p4_len] & 0x80) ? 0 : 1;
 	params->s5 = (p->pp[pp_tva_p5_len] & 0x80) ? 0 : 1;
 
+	// FIXME: find scales
 	params->tf14 = pow(2.0, ((double)p->pp[83] - 64.0) / 20.0);
 	params->tf5 = pow(2.0, ((double)p->pp[84] - 64.0) / 20.0);
 
@@ -1351,7 +1353,7 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 		params->terminal_phase = 5;
 	}
 
-	double p_depth = (double)p->pp[12] * sqrt(0.1);
+	double p_depth = (double)p->pp[12] * sqrt(0.1); // maybe 40.0 / 127.0
 
 	params->p0 = ((double)p->pp[14] - 64.0) * p_depth;
 	params->p1 = ((double)p->pp[15] - 64.0) * p_depth;
@@ -1365,6 +1367,7 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	params->d4 = CONV_VALUE2(p->pp[22]);
 	// params->d5 = CONV_VALUE2(p->pp[23]);
 
+	// FIXME: find scales
 	params->df14 = pow(2.0, ((double)p->pp[28] - 64.0) / 20.0);
 	// params->df5 = pow(2.0, ((double)p->pp[29] - 64.0) / 20.0);
 
