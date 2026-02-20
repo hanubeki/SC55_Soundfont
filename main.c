@@ -1885,9 +1885,9 @@ int32_t main (int32_t argc, char **argv)
 				p->phdr[p->phdr_count].wPreset = x;
 				p->phdr[p->phdr_count].wBank = y;
 				p->phdr[p->phdr_count].wPresetBagNdx = p->pbag_count;
-				p->phdr[p->phdr_count].dwGenre = p->pbag_count;
-				p->phdr[p->phdr_count].dwLibrary = p->pbag_count;
-				p->phdr[p->phdr_count].dwMorphology = p->pbag_count;
+				p->phdr[p->phdr_count].dwGenre = 0;
+				p->phdr[p->phdr_count].dwLibrary = 0;
+				p->phdr[p->phdr_count].dwMorphology = 0;
 
 				clean_name(ins->name, p->phdr[p->phdr_count].achPresetName);
 				p->pbag[p->pbag_count++].wGenNdx = p->pgen_count;
@@ -2002,9 +2002,9 @@ int32_t main (int32_t argc, char **argv)
 		p->phdr[p->phdr_count].wPreset = drum_banks[x];
 		p->phdr[p->phdr_count].wBank = 128;
 		p->phdr[p->phdr_count].wPresetBagNdx = p->pbag_count;
-		p->phdr[p->phdr_count].dwGenre = p->pbag_count;
-		p->phdr[p->phdr_count].dwLibrary = p->pbag_count;
-		p->phdr[p->phdr_count].dwMorphology = p->pbag_count;
+		p->phdr[p->phdr_count].dwGenre = 0;
+		p->phdr[p->phdr_count].dwLibrary = 0;
+		p->phdr[p->phdr_count].dwMorphology = 0;
 
 		clean_name(sc55->drums[x].name, p->phdr[p->phdr_count].achPresetName);
 		printf("Adding bag for %s %d\n", p->phdr[p->phdr_count].achPresetName, drum_start + ((x == 13) ? 9 : x));
