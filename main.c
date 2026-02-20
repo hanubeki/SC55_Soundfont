@@ -1484,13 +1484,12 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 
 	// FIXME: Currently experimental, uncomment to use
 
-	/*
-	double attack_mod = CONV_VALUE(p->pp[46]);
-	double hold_mod = CONV_VALUE(p->pp[47]);
-	double decay_mod = CONV_VALUE(p->pp[48]) + CONV_VALUE(p->pp[49]) + hold_mod;
-	double release_mod = CONV_VALUE(p->pp[50]);
+	double attack_mod = CONV_VALUE2(p->pp[46]);
+	double hold_mod = CONV_VALUE2(p->pp[47]);
+	double decay_mod = CONV_VALUE2(p->pp[48]) + CONV_VALUE2(p->pp[49]) + hold_mod;
+	double release_mod = CONV_VALUE2(p->pp[50]);
 
-	add_igen_short(i, sfg_attackModEnv, (SEC2SF(attack_mod) - ((p->pp[55] - 64) * 20)));
+	add_igen_short(i, sfg_attackModEnv, SEC2SF(attack_mod));
 	//add_igen_short(i, sfg_holdModEnv, (SEC2SF(hold_mod) - ((p->pp[55] - 64) * 20)));
 	add_igen_short(i, sfg_decayModEnv, (SEC2SF(decay_mod) - ((p->pp[55] - 64) * 20)));
 	add_igen_short(i, sfg_releaseModEnv, SEC2SF(release_mod));
@@ -1499,29 +1498,34 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	add_igen_short(i, sfg_keynumToModEnvDecay, (p->pp[55] - 64) * 5);
 
 	// Some implementations don't support this
+	add_imod(i, 0x0000, 0, sfg_attackModEnv, (p->pp[55] - 64) * -320, 0);
+	add_imod(i, 0x0003, 0, sfg_attackModEnv, (p->pp[55] - 64) * 635, 0);
+
 	add_imod(i, 0x0000, 0, sfg_releaseModEnv, (p->pp[56] - 64) * -320, 0);
 	add_imod(i, 0x0003, 0, sfg_releaseModEnv, (p->pp[56] - 64) * 635, 0);
 
-	double base_filter = (double)p->pp[40] / 127.0;
+	double base_filter = ((double)p->pp[40] - 64.0) / 64.0;
 	double initial_filter = ((double)p->pp[41] - 64.0) * base_filter;
 	double terminal_filter = ((double)p->pp[45] - 64.0) * base_filter;
 	double sustain_filter = ((double)p->pp[44] - 64.0) * base_filter;
-	double sustain_value = (terminal_filter == initial_filter) ? 1.0 : (sustain_filter - terminal_filter) / (initial_filter - terminal_filter);
+	// double sustain_value = (terminal_filter == initial_filter) ? 1.0 : (sustain_filter - terminal_filter) / (initial_filter - terminal_filter);
+	double sustain_value = (initial_filter == 0) ? 1.0 : (sustain_filter / initial_filter);
 
 	if (p->pp[35] == 0) {
-		add_igen_short(i, sfg_modEnvToFilterFc, round((initial_filter - terminal_filter) * 100)); // Number in Cents, can be negative
+		// add_igen_short(i, sfg_modEnvToFilterFc, round((initial_filter - terminal_filter) * 100)); // Number in Cents, can be negative
+		add_igen_short(i, sfg_modEnvToFilterFc, round(initial_filter * 100)); // Number in Cents, can be negative
 		add_igen_word(i, sfg_sustainModEnv, 1000 - round(sustain_value * 1000.0)); // Number in 0.1% units
-		add_igen_word(i, sfg_initialFilterFc, round(((double)p->pp[33] + 24 + terminal_filter) * 100)); // Number in Cents
+		// add_igen_word(i, sfg_initialFilterFc, round(((double)p->pp[33] + 24 - terminal_filter) * 100)); // Number in Cents
+		add_igen_word(i, sfg_initialFilterFc, round(((double)p->pp[33] + 60) * 100)); // Number in Cents
 	}
 
 	if (p->pp[34]) {
-		add_igen_word(i, sfg_initialFilterQ, round(pow((double)p->pp[34] / 127.0, 2.0) * 120));
+		add_igen_word(i, sfg_initialFilterQ, round(((double)p->pp[34] / 127.0) * 120));
 	}
 
 	if (p->pp[57] != 64) {
 		add_imod(i, 0x0102, 0, sfg_initialFilterFc, -(p->pp[57] - 64) * 127, 0);
 	}
-	*/
 
 	//---------------//
 	//  Other Stuff  //
@@ -1539,7 +1543,7 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 			add_igen_short(i, sfg_pan, ((double)(drum->panpot[drum_index] - 0x40) / 64.0) * 500.0);
 	}
 
-	add_igen_word(i, sfg_reverbEffectsSend, 70);
+	// add_igen_word(i, sfg_reverbEffectsSend, 70);
 
 	if (p->pp[pp_vibrato_depth] || p->pp[11]) { //FIXME: Find scales
 		//add_imod(i, 0x0081, 0, sfg_vibLfoToVolume, PCT2VOL(0x7F - (p->pp[pp_vibrato_depth] & 0x7F)), 0);
@@ -1647,7 +1651,6 @@ uint32_t add_instrument(struct synth *sc55, struct sf_samples *s, uint32_t part_
 			i->igen[i->igen_count].sfGenOper = sfg_sampleID;
 			i->igen[i->igen_count++].genAmount.wAmount = find_or_make_sample(s, sc55->samples, sc55->wave_data, part->samples[y], &params);
 
-			/*
 			if (partial->pp[37] != 64) {
 				if (partial->pp[36] == 0) {
 					// printf("adding modulator for %s\n", name);
@@ -1709,7 +1712,6 @@ uint32_t add_instrument(struct synth *sc55, struct sf_samples *s, uint32_t part_
 					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
 				}
 			}
-			*/
 
 			if (!breaknext) y++;
 		}
