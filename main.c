@@ -1241,7 +1241,6 @@ uint32_t find_or_make_sample(struct sf_samples *s, struct sample *sc55_samples, 
 #define SEC2SF(x) ((x) ? 1200.0 * log2(x) : INT16_MIN)
 // #define CONV_VALUE(x) ((pow(2.0, (double)(x & 0x7F) / 18.0) / 5.45 - 0.183))
 #define CONV_VALUE(x) (((pow(101.0, (double)(x & 0x7F) / 127.0) - 1.0) / 100.0) * 20.0)
-#define CONV_VALUE2(x) (((pow(101.0, (double)(x & 0x7F) / 127.0) - 1.0) / 100.0) * 10.0)
 #define LFODELAY2SEC(x) (((pow(11.0, (double)(x & 0x7F) / 127.0) - 1.0) / 10.0) * 4.0)
 #define LFOFADE2SEC(x) (((pow(11.0, (double)(x & 0x7F) / 127.0) - 1.0) / 10.0) * 1.0)
 
@@ -1353,7 +1352,7 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 		params->terminal_phase = 5;
 	}
 
-	double p_depth = (double)p->pp[12] * sqrt(0.1); // maybe 40.0 / 127.0
+	double p_depth = (double)p->pp[12] * 0.3;
 
 	params->p0 = ((double)p->pp[14] - 64.0) * p_depth;
 	params->p1 = ((double)p->pp[15] - 64.0) * p_depth;
@@ -1361,11 +1360,11 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	params->p3 = ((double)p->pp[17] - 64.0) * p_depth;
 	// params->p5 = ((double)p->pp[18] - 64.0) * p_depth;
 
-	params->d1 = CONV_VALUE2(p->pp[19]);
-	params->d2 = CONV_VALUE2(p->pp[20]);
-	params->d3 = CONV_VALUE2(p->pp[21]);
-	params->d4 = CONV_VALUE2(p->pp[22]);
-	// params->d5 = CONV_VALUE2(p->pp[23]);
+	params->d1 = CONV_VALUE(p->pp[19]);
+	params->d2 = CONV_VALUE(p->pp[20]);
+	params->d3 = CONV_VALUE(p->pp[21]);
+	params->d4 = CONV_VALUE(p->pp[22]);
+	// params->d5 = CONV_VALUE(p->pp[23]);
 
 	// FIXME: find scales
 	params->df14 = pow(2.0, ((double)p->pp[28] - 64.0) / 20.0);
@@ -1484,10 +1483,10 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 
 	// FIXME: Currently experimental, uncomment to use
 
-	double attack_mod = CONV_VALUE2(p->pp[46]);
-	double hold_mod = CONV_VALUE2(p->pp[47]);
-	double decay_mod = CONV_VALUE2(p->pp[48]) + CONV_VALUE2(p->pp[49]) + hold_mod;
-	double release_mod = CONV_VALUE2(p->pp[50]);
+	double attack_mod = CONV_VALUE(p->pp[46]);
+	double hold_mod = CONV_VALUE(p->pp[47]);
+	double decay_mod = CONV_VALUE(p->pp[48]) + CONV_VALUE(p->pp[49]) + hold_mod;
+	double release_mod = CONV_VALUE(p->pp[50]);
 
 	add_igen_short(i, sfg_attackModEnv, SEC2SF(attack_mod));
 	//add_igen_short(i, sfg_holdModEnv, (SEC2SF(hold_mod) - ((p->pp[55] - 64) * 20)));
@@ -1520,7 +1519,7 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	}
 
 	if (p->pp[34]) {
-		add_igen_word(i, sfg_initialFilterQ, round(((double)p->pp[34] / 127.0) * 120));
+		add_igen_word(i, sfg_initialFilterQ, round(pow((double)p->pp[34] / 127.0, 2.0) * 120));
 	}
 
 	if (p->pp[57] != 64) {
