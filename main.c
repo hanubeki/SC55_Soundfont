@@ -1658,13 +1658,13 @@ uint32_t add_instrument(struct synth *sc55, struct sf_samples *s, uint32_t part_
 					i->imod[i->imod_count].sfModSrcOper = 0x0000;
 					i->imod[i->imod_count].sfModTransOper = 0;
 					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
-					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * -600;
+					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 40;
 					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
 
-					i->imod[i->imod_count].sfModSrcOper = 0x0003;
+					i->imod[i->imod_count].sfModSrcOper = 0x0203;
 					i->imod[i->imod_count].sfModTransOper = 0;
 					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
-					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 1270;
+					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 640;
 					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
 				}
 
@@ -1673,13 +1673,13 @@ uint32_t add_instrument(struct synth *sc55, struct sf_samples *s, uint32_t part_
 					i->imod[i->imod_count].sfModSrcOper = 0x0000;
 					i->imod[i->imod_count].sfModTransOper = 0;
 					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
-					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * -600;
+					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 40;
 					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
 
-					i->imod[i->imod_count].sfModSrcOper = 0x0003;
+					i->imod[i->imod_count].sfModSrcOper = 0x0203;
 					i->imod[i->imod_count].sfModTransOper = 0;
 					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
-					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 1270;
+					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 640;
 					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
 				}
 
@@ -1688,13 +1688,13 @@ uint32_t add_instrument(struct synth *sc55, struct sf_samples *s, uint32_t part_
 					i->imod[i->imod_count].sfModSrcOper = 0x0000;
 					i->imod[i->imod_count].sfModTransOper = 0;
 					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
-					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * -960;
+					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * -320;
 					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
 
-					i->imod[i->imod_count].sfModSrcOper = 0x0003;
+					i->imod[i->imod_count].sfModSrcOper = 0x0203;
 					i->imod[i->imod_count].sfModTransOper = 0;
 					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
-					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 1270;
+					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 640;
 					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
 				}
 
@@ -1703,13 +1703,13 @@ uint32_t add_instrument(struct synth *sc55, struct sf_samples *s, uint32_t part_
 					i->imod[i->imod_count].sfModSrcOper = 0x0000;
 					i->imod[i->imod_count].sfModTransOper = 0;
 					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
-					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * -960;
+					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * -320;
 					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
 
-					i->imod[i->imod_count].sfModSrcOper = 0x0003;
+					i->imod[i->imod_count].sfModSrcOper = 0x0203;
 					i->imod[i->imod_count].sfModTransOper = 0;
 					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
-					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 1270;
+					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 640;
 					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
 				}
 			}
