@@ -1436,12 +1436,12 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	add_igen_short(i, sfg_holdVolEnv, hold ? (SEC2SF(hold) - ((p->pp[83] - 64) * 20)) : INT16_MIN);
 	add_igen_short(i, sfg_decayVolEnv, decay ? (SEC2SF(decay) - ((p->pp[83] - 64) * 20)) : INT16_MIN);
 
-	add_igen_short(i, sfg_keynumToVolEnvHold, (p->pp[83] - 64) * 5);
-	add_igen_short(i, sfg_keynumToVolEnvDecay, (p->pp[83] - 64) * 5);
+	add_igen_short(i, sfg_keynumToVolEnvHold, (p->pp[83] - 64) * -5);
+	add_igen_short(i, sfg_keynumToVolEnvDecay, (p->pp[83] - 64) * -5);
 
 	// Some implementations don't support this
-	add_imod(i, 0x0000, 0, sfg_releaseVolEnv, (p->pp[84] - 64) * -320, 0);
-	add_imod(i, 0x0003, 0, sfg_releaseVolEnv, (p->pp[84] - 64) * 635, 0);
+	add_imod(i, 0x0000, 0, sfg_releaseVolEnv, (p->pp[84] - 64) * -20, 0);
+	add_imod(i, 0x0203, 0, sfg_releaseVolEnv, (p->pp[84] - 64) * 320, 0);
 
 /*
 	if (is_drum)
@@ -1493,15 +1493,15 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	add_igen_short(i, sfg_decayModEnv, (SEC2SF(decay_mod) - ((p->pp[55] - 64) * 20)));
 	add_igen_short(i, sfg_releaseModEnv, SEC2SF(release_mod));
 
-	add_igen_short(i, sfg_keynumToModEnvHold, (p->pp[55] - 64) * 5);
-	add_igen_short(i, sfg_keynumToModEnvDecay, (p->pp[55] - 64) * 5);
+	add_igen_short(i, sfg_keynumToModEnvHold, (p->pp[55] - 64) * -5);
+	add_igen_short(i, sfg_keynumToModEnvDecay, (p->pp[55] - 64) * -5);
 
 	// Some implementations don't support this
-	add_imod(i, 0x0000, 0, sfg_attackModEnv, (p->pp[55] - 64) * -320, 0);
-	add_imod(i, 0x0003, 0, sfg_attackModEnv, (p->pp[55] - 64) * 635, 0);
+	add_imod(i, 0x0000, 0, sfg_attackModEnv, (p->pp[55] - 64) * -20, 0);
+	add_imod(i, 0x0203, 0, sfg_attackModEnv, (p->pp[55] - 64) * 320, 0);
 
-	add_imod(i, 0x0000, 0, sfg_releaseModEnv, (p->pp[56] - 64) * -320, 0);
-	add_imod(i, 0x0003, 0, sfg_releaseModEnv, (p->pp[56] - 64) * 635, 0);
+	add_imod(i, 0x0000, 0, sfg_releaseModEnv, (p->pp[56] - 64) * -20, 0);
+	add_imod(i, 0x0203, 0, sfg_releaseModEnv, (p->pp[56] - 64) * 320, 0);
 
 	double base_filter = ((double)p->pp[40] - 64.0) / 64.0 * sqrt(0.5);
 	double initial_filter = ((double)p->pp[41] - 64.0) * base_filter;
@@ -1564,6 +1564,7 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 		add_imod(i, 0x0081, 0, sfg_modLfoToPitch, 0, 0);
 	}
 
+/*
 	if (!is_drum) {
 		add_igen_word(i, sfg_keynumToVolEnvDecay, 0);
 		add_igen_word(i, sfg_keynumToVolEnvHold, 0);
@@ -1575,6 +1576,7 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 		add_igen_word(i, sfg_keynumToModEnvDecay, 0);
 		add_igen_word(i, sfg_keynumToModEnvHold, 0);
 	}
+*/
 
 
 }
