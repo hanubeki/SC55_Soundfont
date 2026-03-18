@@ -1181,7 +1181,7 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 
 	uint32_t len = s->shdr[s->num_samples].dwEnd - s->shdr[s->num_samples].dwStart;
 
-	double volume = SC552AMP((double)sc55_samples[source].volume) * pow(10.0, (double)(sc55_samples[source].fine_volume - 1024) / 20000.0);
+	double volume = SC552AMP((double)sc55_samples[source].volume);
 
 	uint32_t last_value = 0;
 	for (int32_t x = 0; x < 5; x++) {
