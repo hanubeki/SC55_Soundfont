@@ -835,7 +835,17 @@ void apply_envelope(int32_t *samples, uint32_t length, double *initial_amplitude
 			case 4: // Level only
 				current_amp = target_amplitude;
 			break;
+
+			case 5: // Attack Linear
+				current_amp = (samp_index > 0) ? (*initial_amplitude + level_difference * ((double)samp_index / (double)length) / (log(10.0 *samp_index / length + 1) / log(10.0 + 1))) : *initial_amplitude;
+			break;
 			
+			case 6: // Attack Concave
+			case 7: // Attack "Convex"
+			case 9: // Level only
+				current_amp = target_amplitude;
+			break;
+
 		}
 		samples[samp_index] = round((double)samples[samp_index] * (current_amp / max_amp));
 	}
@@ -1001,7 +1011,7 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 	addr_ptr = write_sample_data(addr_ptr, loop_start_offset, sc55_samples[source].loop_mode, loop_end_offset,
 		TIME2SAMP(params->t1 * pow(params->tf14, ((double)s->shdr[s->num_samples].byOriginalPitch - 64.0) / 12.0)), &delta, sbuf, &sbuf_size, dec, total_length, dec_buf);
 	levels[env_index] = params->l1;
-	shapes[env_index] = params->s1;
+	shapes[env_index] = params->s1 + 5;
 	starts[env_index++] = sbuf_size;
 
 	// Phase 2
@@ -1384,34 +1394,39 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	// 	p1_vol, p2_vol, p3_vol, p4_vol);
 	// }
 
+	double attack = 0;
 	double decay = 0;
 	double hold = 0;
 	double release = 0;
 
 	switch (params->terminal_phase) {
 		case 2:
-			hold = p1_val;
+			attack = p1_val;
+			hold = 0;
 			decay = !params->s2 ? p2_val * 2.0 : p2_val;
 			// terminal_atten = p->pp[pp_tva_p2_vol];
 			terminal_vol = p2_vol / p1_vol;
 			break;
 
 		case 3:
-			hold = p1_val + p2_val;
+			attack = p1_val;
+			hold = p2_val;
 			decay = !params->s3 ? p3_val * 2.0 :p3_val;
 			// terminal_atten = p->pp[pp_tva_p3_vol];
 			terminal_vol = p3_vol / p2_vol;
 			break;
 
 		case 4:
-			hold = p1_val + p2_val + p3_val;
+			attack = p1_val;
+			hold = p2_val + p3_val;
 			decay = !params->s4 ? p4_val * 2.0 : p4_val;
 			// terminal_atten = p->pp[pp_tva_p4_vol];
 			terminal_vol = p4_vol / p3_vol;
 			break;
 
 		default:
-			hold = p1_val + p2_val + p3_val + p4_val;
+			attack = p1_val;
+			hold = p2_val + p3_val + p4_val;
 			decay = 0;
 			// terminal_atten = p->pp[pp_tva_p4_vol];
 			terminal_vol = 1.0;
@@ -1421,10 +1436,11 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	bool max_sustain = false;
 	if ((is_drum && !(drum->flags[drum_index] & 0x01))) { // Simulate ignore note_off
 		if (no_loops) {
-			release = (hold + decay) + 8.0;
+			release = (attack + hold + decay) + 8.0;
 		} else {
-			release = hold + decay;
+			release = attack + hold + decay;
 			decay = release;
+			attack = 0;
 			hold = 0;
 		}
 		max_sustain = true;
@@ -1432,6 +1448,7 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 		release = p5_val;
 	}
 
+	add_igen_short(i, sfg_attackVolEnv, attack ? SEC2SF(attack) : INT16_MIN);
 	add_igen_short(i, sfg_releaseVolEnv, release ? SEC2SF(release) : INT16_MIN);
 	add_igen_short(i, sfg_holdVolEnv, hold ? (SEC2SF(hold) - ((p->pp[83] - 64) * 20)) : INT16_MIN);
 	add_igen_short(i, sfg_decayVolEnv, decay ? (SEC2SF(decay) - ((p->pp[83] - 64) * 20)) : INT16_MIN);
@@ -1440,6 +1457,9 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	add_igen_short(i, sfg_keynumToVolEnvDecay, (p->pp[83] - 64) * -5);
 
 	// Some implementations don't support this
+	add_imod(i, 0x0000, 0, sfg_attackVolEnv, (p->pp[83] - 64) * -20, 0);
+	add_imod(i, 0x0203, 0, sfg_attackVolEnv, (p->pp[83] - 64) * 320, 0);
+
 	add_imod(i, 0x0000, 0, sfg_releaseVolEnv, (p->pp[84] - 64) * -20, 0);
 	add_imod(i, 0x0203, 0, sfg_releaseVolEnv, (p->pp[84] - 64) * 320, 0);
 
