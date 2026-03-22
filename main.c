@@ -1653,6 +1653,16 @@ uint32_t add_instrument(struct synth *sc55, struct sf_samples *s, uint32_t part_
 				breaknext = true;
 			}
 
+			if (partial->pp[66] == 0 && (last_value < 64 && breaks > 64)) {
+				breaks = 64;
+				breaknext = true;
+			}
+
+			if (partial->pp[66] == 1 && (last_value < 85 && breaks > 85)) {
+				breaks = 85;
+				breaknext = true;
+			}
+
 			if (partial->pp[36] >= 2 && partial->pp[37] != 64 && (last_value < 96 && breaks > 96)) {
 				breaks = 96;
 				breaknext = true;
@@ -1661,7 +1671,6 @@ uint32_t add_instrument(struct synth *sc55, struct sf_samples *s, uint32_t part_
 			i->igen[i->igen_count].sfGenOper = sfg_keyRange;
 			i->igen[i->igen_count].genAmount.ranges.byLo = last_value ? last_value + 1 : 0;
 			i->igen[i->igen_count++].genAmount.ranges.byHi = breaks;
-			last_value = breaks;
 
 			i->igen[i->igen_count].sfGenOper = sfg_sampleModes;
 			i->igen[i->igen_count++].genAmount.wAmount = sc55->samples[part->samples[y]].loop_mode == 2 ? 0 : 1;
@@ -1718,7 +1727,7 @@ uint32_t add_instrument(struct synth *sc55, struct sf_samples *s, uint32_t part_
 					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
 				}
 
-				if (partial->pp[36] == 3 && breaks <= 96) {
+				if (partial->pp[36] == 3 && last_value >= 96) {
 					// printf("adding modulator for %s\n", name);
 					i->imod[i->imod_count].sfModSrcOper = 0x0000;
 					i->imod[i->imod_count].sfModTransOper = 0;
@@ -1734,6 +1743,38 @@ uint32_t add_instrument(struct synth *sc55, struct sf_samples *s, uint32_t part_
 				}
 			}
 
+			double biasamp = pow(SC552AMP(127 - abs(partial->pp[67] - 64)), (partial->pp[67] < 64) ? 3.2 : -3.2);
+
+			if (partial->pp[66] == 0) {
+				i->imod[i->imod_count].sfModSrcOper = 0x0203;
+				i->imod[i->imod_count].sfModTransOper = 0;
+				i->imod[i->imod_count].sfModDestOper = sfg_initialAttenuation;
+				i->imod[i->imod_count].modAmount = MAG2DB(biasamp);
+				i->imod[i->imod_count++].sfModAmtSrcOper = 0;
+			}
+
+			if (partial->pp[66] == 1 && last_value >= 85) {
+				i->imod[i->imod_count].sfModSrcOper = 0x0000;
+				i->imod[i->imod_count].sfModTransOper = 0;
+				i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
+				i->imod[i->imod_count].modAmount = MAG2DB(biasamp) * (64.0 - 85.0) / 64.0;
+				i->imod[i->imod_count++].sfModAmtSrcOper = 0;
+
+				i->imod[i->imod_count].sfModSrcOper = 0x0203;
+				i->imod[i->imod_count].sfModTransOper = 0;
+				i->imod[i->imod_count].sfModDestOper = sfg_initialAttenuation;
+				i->imod[i->imod_count].modAmount = MAG2DB(biasamp);
+				i->imod[i->imod_count++].sfModAmtSrcOper = 0;
+			}
+
+			if (partial->pp[66] == 2) {
+				i->imod[i->imod_count].sfModSrcOper = 0x0000;
+				i->imod[i->imod_count].sfModTransOper = 0;
+				i->imod[i->imod_count].sfModDestOper = sfg_initialAttenuation;
+				i->imod[i->imod_count].modAmount = MAG2DB(biasamp);
+				i->imod[i->imod_count++].sfModAmtSrcOper = 0;
+			}
+			last_value = breaks;
 			if (!breaknext) y++;
 		}
 		return i->inst_count++;
