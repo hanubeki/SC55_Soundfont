@@ -1503,7 +1503,7 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	add_imod(i, 0x0000, 0, sfg_releaseModEnv, (p->pp[56] - 64) * -20, 0);
 	add_imod(i, 0x0203, 0, sfg_releaseModEnv, (p->pp[56] - 64) * 320, 0);
 
-	double base_filter = ((double)p->pp[40] - 64.0) / 64.0 * sqrt(0.5);
+	double base_filter = ((double)p->pp[40] - 64.0) / 100.0;
 	double initial_filter = ((double)p->pp[41] - 64.0) * base_filter;
 	double terminal_filter = ((double)p->pp[45] - 64.0) * base_filter;
 	double sustain_filter = ((double)p->pp[44] - 64.0) * base_filter;
