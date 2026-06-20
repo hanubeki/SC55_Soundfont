@@ -2004,8 +2004,9 @@ int32_t main (int32_t argc, char **argv)
 					sf_inst->igen[sf_inst->igen_count++].genAmount.shAmount = new_key;
 
 
-					sf_inst->igen[sf_inst->igen_count].sfGenOper = sfg_initialAttenuation;
-					sf_inst->igen[sf_inst->igen_count++].genAmount.shAmount = PCT2VOL2(sc55->drums[x].volume[y]);
+					// These lines have no effect as it is overridden by add_instrument_params()
+					// sf_inst->igen[sf_inst->igen_count].sfGenOper = sfg_initialAttenuation;
+					// sf_inst->igen[sf_inst->igen_count++].genAmount.shAmount = PCT2VOL2(sc55->drums[x].volume[y]);
 
 					// double ih_pan = ((double)((sc55->instruments[sc55->drums[x].preset[y]].header[ih_panpot] ? sc55->instruments[sc55->drums[x].preset[y]].header[ih_panpot] : 0x4F) - 0x4F) / 79.0) * 500.0;
 					double drum_pan =((double)(0x40 - (sc55->drums[x].panpot[y] ? sc55->drums[x].panpot[y] : 0x40)) / 64.0);
