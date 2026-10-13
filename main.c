@@ -82,7 +82,7 @@ uint32_t banks_sc55[8] ={0x10000, 0x1BD00, 0x1DEC0, 0x20000, 0x2BD00, 0x2DEC0, 0
 // #define SC552AMP(x) (0.1 * pow(2.0, (double)(x) / 36.7111) - 0.1)
 #define SC552AMP(x) ((pow(11.0, (double)(x) / 127.0) - 1.0) / 10.0)
 #define PCT2VOL(x) ((x) == 127 ? 0 : ((x) > 0 ? MAG2DB(SC552AMP(x)) : 1440))
-#define SC552AMP2(x) ((pow(1001.0, (double)(x) / 127.0) - 1.0) / 1000.0)
+#define SC552AMP2(x) ((pow(11.0, (double)(x) / 127.0) - 1.0) / 10.0)
 #define PCT2VOL2(x) ((x) == 127 ? 0 : ((x) > 0 ? MAG2DB(SC552AMP2(x)) : 1440))
 // #define AMP2VOL(x) ((x) > 0 ? MAG2DB(x) : 1440)
 
@@ -649,7 +649,7 @@ void export_sample(int32_t *samples, size_t num_samples, char *file_name)
 // It doesn't do RIAA filter anymore but leave it for collecting clipped samples
 uint32_t apply_riaa_filter(biquad bq, int32_t *sample, size_t len, double vol, uint32_t sample_num)
 {
-	long double attenuate = vol / (SC552AMP(127));
+	long double attenuate = vol;
 
 /*
 	long double *conv_buffer = calloc(len + 1000, sizeof(long double));
@@ -668,17 +668,10 @@ uint32_t apply_riaa_filter(biquad bq, int32_t *sample, size_t len, double vol, u
 	// hpf.nd = 2;
 	// hpf.nn = 2;
 
-	// hpf.d[0] = 1.000000000000000L;
-	// hpf.d[1] = -0.998038429728411L;
-	// hpf.n[0] = 0.999019214864206L;
-	// hpf.n[1] = -0.999019214864206l;
-	// hpf.nd = 2;
-	// hpf.nn = 2;
-
-	hpf.d[0] = 1.0L;
-	hpf.d[1] = -1.0L;
-	hpf.n[0] = 0.995L;
-	hpf.n[1] = -0.995L;
+	hpf.d[0] = 1.000000000000000L;
+	hpf.d[1] = -0.998038429728411L;
+	hpf.n[0] = 0.999019214864206L;
+	hpf.n[1] = -0.999019214864206l;
 	hpf.nd = 2;
 	hpf.nn = 2;
 
@@ -695,8 +688,7 @@ uint32_t apply_riaa_filter(biquad bq, int32_t *sample, size_t len, double vol, u
 		// FIXME: Unfortunately after filtering twice the volume is extremely low, and the range
 		// much too high so I do a raw shift of * 8 and then use a compressor to further increase
 		// the percieved volume.
-		// int32_t t_val = compress_sample((conv_buffer2[x] * 4.0L) * attenuate, 16);
-		// int32_t t_val = (int32_t) roundl((conv_buffer2[x] * 4.0L) * attenuate);
+		// int32_t t_val = compress_sample((sample[x] * 4.0L) * attenuate, 16);
 		int32_t t_val = (int32_t) roundl(sample[x] * sqrtl(2.0L) * attenuate);
 
 		if (t_val > INT24_MAX) {
@@ -819,7 +811,6 @@ void apply_envelope(int32_t *samples, uint32_t length, double *initial_amplitude
 	}
 	double current_amp = *initial_amplitude;
 	int32_t total_length = length;
-	double max_amp = SC552AMP(0X7F);
 	double level_difference = (target_amplitude - *initial_amplitude);
 	for (uint32_t samp_index = 0; samp_index < length; samp_index++) {
 		switch (shape) {
@@ -837,7 +828,7 @@ void apply_envelope(int32_t *samples, uint32_t length, double *initial_amplitude
 			break;
 			
 		}
-		samples[samp_index] = round((double)samples[samp_index] * (current_amp / max_amp));
+		samples[samp_index] = round((double)samples[samp_index] * current_amp);
 	}
 
 	*initial_amplitude = current_amp;
@@ -976,8 +967,7 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 	s->shdr[s->num_samples].dwEndloop = s->shdr[s->num_samples].dwStart + loop_end_offset;
 
 	// 30 second buffer size
-	int32_t *sbuf_full = calloc(480 * 32000, sizeof(int32_t));
-	int32_t *sbuf = &sbuf_full[2 * 32000];
+	int32_t *sbuf = calloc(480 * 32000, sizeof(int32_t));
 	size_t sbuf_size = 0;
 	uint32_t sample_end = address + total_length;
 
@@ -1181,7 +1171,7 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 
 	uint32_t len = s->shdr[s->num_samples].dwEnd - s->shdr[s->num_samples].dwStart;
 
-	double volume = SC552AMP((double)sc55_samples[source].volume);
+	double volume = SC552AMP(sc55_samples[source].volume);
 
 	uint32_t last_value = 0;
 	for (int32_t x = 0; x < 5; x++) {
@@ -1194,17 +1184,14 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 	}
 
 	// Add data to prevent filter nonsense
-	for (int32_t x = 0; x < (2 * 32000); x++) {
-		sbuf_full[(2 * 32000) - x - 1] = -sbuf_full[(2 * 32000) + x];
-	}
-	apply_riaa_filter(bq, sbuf_full, len + (2 * 32000), volume, source);
+	apply_riaa_filter(bq, sbuf, len, volume, source);
 	
 	for (int32_t x = 0; x < sbuf_size; x++) {
 		s->sample16[s->data_size + x] = sbuf[x] >> 8;
 		s->sample8[s->data_size + x] = (sbuf[x] & 0xFF);
 	}
 
-	free(sbuf_full);
+	free(sbuf);
 	s->data_size += sbuf_size + 46;
 	if (s->shdr[s->num_samples].dwStartloop - s->shdr[s->num_samples].dwStart < 8) {
 		printf("Short pre-loop sample %d\n", source);
@@ -1240,7 +1227,7 @@ uint32_t find_or_make_sample(struct sf_samples *s, struct sample *sc55_samples, 
 
 #define SEC2SF(x) ((x) ? 1200.0 * log2(x) : INT16_MIN)
 // #define CONV_VALUE(x) ((pow(2.0, (double)(x & 0x7F) / 18.0) / 5.45 - 0.183))
-#define CONV_VALUE(x) (((pow(101.0, (double)(x & 0x7F) / 127.0) - 1.0) / 100.0) * 20.0)
+#define CONV_VALUE(x) (((pow(101.0, (double)(x & 0x7F) / 127.0) - 1.0) / 100.0) * 15.0)
 #define LFODELAY2SEC(x) (((pow(11.0, (double)(x & 0x7F) / 127.0) - 1.0) / 10.0) * 4.0)
 #define LFOFADE2SEC(x) (((pow(11.0, (double)(x & 0x7F) / 127.0) - 1.0) / 10.0) * 1.0)
 
@@ -1436,12 +1423,14 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	add_igen_short(i, sfg_holdVolEnv, hold ? (SEC2SF(hold) - ((p->pp[83] - 64) * 20)) : INT16_MIN);
 	add_igen_short(i, sfg_decayVolEnv, decay ? (SEC2SF(decay) - ((p->pp[83] - 64) * 20)) : INT16_MIN);
 
-	add_igen_short(i, sfg_keynumToVolEnvHold, (p->pp[83] - 64) * -5);
-	add_igen_short(i, sfg_keynumToVolEnvDecay, (p->pp[83] - 64) * -5);
+	if (!is_drum) {
+		add_igen_short(i, sfg_keynumToVolEnvHold, (p->pp[83] - 64) * -5);
+		add_igen_short(i, sfg_keynumToVolEnvDecay, (p->pp[83] - 64) * -5);
 
-	// Some implementations don't support this
-	add_imod(i, 0x0000, 0, sfg_releaseVolEnv, (p->pp[84] - 64) * -20, 0);
-	add_imod(i, 0x0203, 0, sfg_releaseVolEnv, (p->pp[84] - 64) * 320, 0);
+		// Some implementations don't support this
+		add_imod(i, 0x0000, 0, sfg_releaseVolEnv, (p->pp[84] - 64) * -20, 0);
+		add_imod(i, 0x0203, 0, sfg_releaseVolEnv, (p->pp[84] - 64) * 320, 0);
+	}
 
 /*
 	if (is_drum)
@@ -1473,7 +1462,7 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 	}
 
 	if (is_drum)
-		add_igen_word(i, sfg_initialAttenuation, round(PCT2VOL2(p->pp[pp_part_attenuation] - (0x7f - drum->volume[drum_index])))); // FIXME: drums have volume mod
+		add_igen_word(i, sfg_initialAttenuation, round(PCT2VOL2(p->pp[pp_part_attenuation] - (0x7f - drum->volume[drum_index]))));
 	else
 		add_igen_word(i, sfg_initialAttenuation, round(PCT2VOL2(p->pp[pp_part_attenuation])));
 
@@ -1502,29 +1491,6 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 
 	add_imod(i, 0x0000, 0, sfg_releaseModEnv, (p->pp[56] - 64) * -20, 0);
 	add_imod(i, 0x0203, 0, sfg_releaseModEnv, (p->pp[56] - 64) * 320, 0);
-
-	double base_filter = ((double)p->pp[40] - 64.0) / 100.0;
-	double initial_filter = ((double)p->pp[41] - 64.0) * base_filter;
-	double terminal_filter = ((double)p->pp[45] - 64.0) * base_filter;
-	double sustain_filter = ((double)p->pp[44] - 64.0) * base_filter;
-	// double sustain_value = (terminal_filter == initial_filter) ? 1.0 : (sustain_filter - terminal_filter) / (initial_filter - terminal_filter);
-	double sustain_value = (initial_filter == 0) ? 1.0 : (sustain_filter / initial_filter);
-
-	if (p->pp[35] == 0) {
-		// add_igen_short(i, sfg_modEnvToFilterFc, round((initial_filter - terminal_filter) * 100)); // Number in Cents, can be negative
-		add_igen_short(i, sfg_modEnvToFilterFc, round(initial_filter * 100)); // Number in Cents, can be negative
-		add_igen_word(i, sfg_sustainModEnv, 1000 - round(sustain_value * 1000.0)); // Number in 0.1% units
-		// add_igen_word(i, sfg_initialFilterFc, round(((double)p->pp[33] + 24 - terminal_filter) * 100)); // Number in Cents
-		add_igen_word(i, sfg_initialFilterFc, round(((double)p->pp[33] + 48) * 100)); // Number in Cents
-	}
-
-	if (p->pp[34]) {
-		add_igen_word(i, sfg_initialFilterQ, round(pow((double)p->pp[34] / 127.0, 2.0) * 120));
-	}
-
-	if (p->pp[57] != 64) {
-		add_imod(i, 0x0102, 0, sfg_initialFilterFc, -(p->pp[57] - 64) * 127, 0);
-	}
 
 	//---------------//
 	//  Other Stuff  //
@@ -1633,12 +1599,14 @@ uint32_t add_instrument(struct synth *sc55, struct sf_samples *s, uint32_t part_
 				breaknext = true;
 			}
 
-			if (partial->pp[66] == 0 && (last_value < 64 && breaks > 64)) {
+/*
+			if (partial->pp[66] == 0 && partial->pp[67] != 64 && (last_value < 64 && breaks > 64)) {
 				breaks = 64;
 				breaknext = true;
 			}
+*/
 
-			if (partial->pp[66] == 1 && (last_value < 85 && breaks > 85)) {
+			if (partial->pp[66] == 1 && partial->pp[67] != 64 && (last_value < 85 && breaks > 85)) {
 				breaks = 85;
 				breaknext = true;
 			}
@@ -1658,102 +1626,110 @@ uint32_t add_instrument(struct synth *sc55, struct sf_samples *s, uint32_t part_
 			// igen[igen_count].sfGenOper = 48;
 			// igen[igen_count++].genAmount.wAmount = (0x7F - sc55->samples[sc55->parts[x].samples[y]].volume) * 25;
 
+			if (partial->pp[67] != 64) {
+				short biasamp = (partial->pp[67] - 64) * -10;
+
+				if (partial->pp[66] == 0) {
+					i->imod[i->imod_count].sfModSrcOper = 0x0203;
+					i->imod[i->imod_count].sfModTransOper = 0;
+					i->imod[i->imod_count].sfModDestOper = sfg_initialAttenuation;
+					i->imod[i->imod_count].modAmount = biasamp / 2;
+					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
+				}
+
+				if (partial->pp[66] == 1 && last_value >= 85) {
+					i->igen[i->igen_count].sfGenOper = sfg_initialAttenuation;
+					i->igen[i->igen_count++].genAmount.shAmount = round((double)biasamp * (127.0 - 85.0) / 127.0);
+
+					i->imod[i->imod_count].sfModSrcOper = 0x0103;
+					i->imod[i->imod_count].sfModTransOper = 0;
+					i->imod[i->imod_count].sfModDestOper = sfg_initialAttenuation;
+					i->imod[i->imod_count].modAmount = -biasamp;
+					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
+				}
+
+				if (partial->pp[66] == 2) {
+					i->igen[i->igen_count].sfGenOper = sfg_initialAttenuation;
+					i->igen[i->igen_count++].genAmount.shAmount = biasamp;
+				}
+			}
+
+			if (partial->pp[37] != 64) {
+				double base_filter = ((double)partial->pp[40] - 64.0) / 100.0;
+				double initial_filter = ((double)partial->pp[41] - 64.0) * base_filter;
+				double terminal_filter = ((double)partial->pp[45] - 64.0) * base_filter;
+				double sustain_filter = ((double)partial->pp[44] - 64.0) * base_filter;
+				// double sustain_value = (terminal_filter == initial_filter) ? 1.0 : (sustain_filter - terminal_filter) / (initial_filter - terminal_filter);
+				double sustain_value = (initial_filter == 0) ? 1.0 : (sustain_filter / initial_filter);
+
+				// add_igen_short(i, sfg_modEnvToFilterFc, round((initial_filter - terminal_filter) * 100)); // Number in Cents, can be negative
+				add_igen_short(i, sfg_modEnvToFilterFc, round(initial_filter * 100)); // Number in Cents, can be negative
+				add_igen_word(i, sfg_sustainModEnv, 1000 - round(sustain_value * 1000.0)); // Number in 0.1% units
+				// add_igen_word(i, sfg_initialFilterFc, round(((double)p->pp[33] + 24 - terminal_filter) * 100)); // Number in Cents
+				// add_igen_word(i, sfg_initialFilterFc, round(((double)p->pp[33] + 48) * 100)); // Number in Cents
+
+				if (partial->pp[34]) {
+					add_igen_word(i, sfg_initialFilterQ, round(((double)partial->pp[34] / 127.0) * 120));
+				}
+
+				if (partial->pp[57] != 64) {
+					add_imod(i, 0x0102, 0, sfg_modEnvToFilterFc, round(((double)partial->pp[57] - 64) * initial_filter * 10), 0);
+				}
+
+				if (partial->pp[35] == 0) {
+					short base_fc = (partial->pp[33] + 48) * 100;
+
+					if (partial->pp[36] == 0) {
+						// printf("adding modulator for %s\n", name);
+						i->igen[i->igen_count].sfGenOper = sfg_initialFilterFc;
+						i->igen[i->igen_count++].genAmount.shAmount = base_fc + (partial->pp[37] - 64) * 80;
+
+						i->imod[i->imod_count].sfModSrcOper = 0x0203;
+						i->imod[i->imod_count].sfModTransOper = 0;
+						i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
+						i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 1280;
+						i->imod[i->imod_count++].sfModAmtSrcOper = 0;
+					} else if (partial->pp[36] == 1 && breaks <= 60) {
+						// printf("adding modulator for %s\n", name);
+						i->igen[i->igen_count].sfGenOper = sfg_initialFilterFc;
+						i->igen[i->igen_count++].genAmount.shAmount = base_fc + (partial->pp[37] - 64) * -80;
+
+						i->imod[i->imod_count].sfModSrcOper = 0x0203;
+						i->imod[i->imod_count].sfModTransOper = 0;
+						i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
+						i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * -1280;
+						i->imod[i->imod_count++].sfModAmtSrcOper = 0;
+					} else if (partial->pp[36] == 2 && breaks <= 96) {
+						// printf("adding modulator for %s\n", name);
+						i->igen[i->igen_count].sfGenOper = sfg_initialFilterFc;
+						i->igen[i->igen_count++].genAmount.shAmount = base_fc + (partial->pp[37] - 64) * 640;
+
+						i->imod[i->imod_count].sfModSrcOper = 0x0203;
+						i->imod[i->imod_count].sfModTransOper = 0;
+						i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
+						i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * -1280;
+						i->imod[i->imod_count++].sfModAmtSrcOper = 0;
+					} else if (partial->pp[36] == 3 && last_value >= 96) {
+						// printf("adding modulator for %s\n", name);
+						i->igen[i->igen_count].sfGenOper = sfg_initialFilterFc;
+						i->igen[i->igen_count++].genAmount.shAmount = base_fc + (partial->pp[37] - 64) * -640;
+
+						i->imod[i->imod_count].sfModSrcOper = 0x0203;
+						i->imod[i->imod_count].sfModTransOper = 0;
+						i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
+						i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 1280;
+						i->imod[i->imod_count++].sfModAmtSrcOper = 0;
+					} else {
+						// printf("adding modulator for %s\n", name);
+						i->igen[i->igen_count].sfGenOper = sfg_initialFilterFc;
+						i->igen[i->igen_count++].genAmount.shAmount = base_fc;
+					}
+				}
+			}
+
 			i->igen[i->igen_count].sfGenOper = sfg_sampleID;
 			i->igen[i->igen_count++].genAmount.wAmount = find_or_make_sample(s, sc55->samples, sc55->wave_data, part->samples[y], &params);
 
-			if (partial->pp[37] != 64) {
-				if (partial->pp[36] == 0) {
-					// printf("adding modulator for %s\n", name);
-					i->imod[i->imod_count].sfModSrcOper = 0x0000;
-					i->imod[i->imod_count].sfModTransOper = 0;
-					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
-					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 40;
-					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
-
-					i->imod[i->imod_count].sfModSrcOper = 0x0203;
-					i->imod[i->imod_count].sfModTransOper = 0;
-					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
-					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 640;
-					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
-				}
-
-				if (partial->pp[36] == 1 && breaks > 60) {
-					// printf("adding modulator for %s\n", name);
-					i->imod[i->imod_count].sfModSrcOper = 0x0000;
-					i->imod[i->imod_count].sfModTransOper = 0;
-					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
-					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 40;
-					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
-
-					i->imod[i->imod_count].sfModSrcOper = 0x0203;
-					i->imod[i->imod_count].sfModTransOper = 0;
-					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
-					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 640;
-					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
-				}
-
-				if (partial->pp[36] == 2 && breaks > 96) {
-					// printf("adding modulator for %s\n", name);
-					i->imod[i->imod_count].sfModSrcOper = 0x0000;
-					i->imod[i->imod_count].sfModTransOper = 0;
-					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
-					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * -320;
-					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
-
-					i->imod[i->imod_count].sfModSrcOper = 0x0203;
-					i->imod[i->imod_count].sfModTransOper = 0;
-					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
-					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 640;
-					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
-				}
-
-				if (partial->pp[36] == 3 && last_value >= 96) {
-					// printf("adding modulator for %s\n", name);
-					i->imod[i->imod_count].sfModSrcOper = 0x0000;
-					i->imod[i->imod_count].sfModTransOper = 0;
-					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
-					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * -320;
-					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
-
-					i->imod[i->imod_count].sfModSrcOper = 0x0203;
-					i->imod[i->imod_count].sfModTransOper = 0;
-					i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
-					i->imod[i->imod_count].modAmount = (partial->pp[37] - 64) * 640;
-					i->imod[i->imod_count++].sfModAmtSrcOper = 0;
-				}
-			}
-
-			double biasamp = pow(SC552AMP(127 - abs(partial->pp[67] - 64)), (partial->pp[67] < 64) ? 3.2 : -3.2);
-
-			if (partial->pp[66] == 0) {
-				i->imod[i->imod_count].sfModSrcOper = 0x0203;
-				i->imod[i->imod_count].sfModTransOper = 0;
-				i->imod[i->imod_count].sfModDestOper = sfg_initialAttenuation;
-				i->imod[i->imod_count].modAmount = MAG2DB(biasamp);
-				i->imod[i->imod_count++].sfModAmtSrcOper = 0;
-			}
-
-			if (partial->pp[66] == 1 && last_value >= 85) {
-				i->imod[i->imod_count].sfModSrcOper = 0x0000;
-				i->imod[i->imod_count].sfModTransOper = 0;
-				i->imod[i->imod_count].sfModDestOper = sfg_initialFilterFc;
-				i->imod[i->imod_count].modAmount = MAG2DB(biasamp) * (64.0 - 85.0) / 64.0;
-				i->imod[i->imod_count++].sfModAmtSrcOper = 0;
-
-				i->imod[i->imod_count].sfModSrcOper = 0x0203;
-				i->imod[i->imod_count].sfModTransOper = 0;
-				i->imod[i->imod_count].sfModDestOper = sfg_initialAttenuation;
-				i->imod[i->imod_count].modAmount = MAG2DB(biasamp);
-				i->imod[i->imod_count++].sfModAmtSrcOper = 0;
-			}
-
-			if (partial->pp[66] == 2) {
-				i->imod[i->imod_count].sfModSrcOper = 0x0000;
-				i->imod[i->imod_count].sfModTransOper = 0;
-				i->imod[i->imod_count].sfModDestOper = sfg_initialAttenuation;
-				i->imod[i->imod_count].modAmount = MAG2DB(biasamp);
-				i->imod[i->imod_count++].sfModAmtSrcOper = 0;
-			}
 			last_value = breaks;
 			if (!breaknext) y++;
 		}
