@@ -220,6 +220,7 @@ typedef struct sample_params {
 	// double d5;
 	double df14; // Pitch envelope time key follow
 	// double df5;
+	double volume;
 } sample_params;
 
 packed_struct sample_record {
@@ -689,7 +690,7 @@ uint32_t apply_riaa_filter(biquad bq, int32_t *sample, size_t len, double vol, u
 		// much too high so I do a raw shift of * 8 and then use a compressor to further increase
 		// the percieved volume.
 		// int32_t t_val = compress_sample((sample[x] * 4.0L) * attenuate, 16);
-		int32_t t_val = (int32_t) roundl(sample[x] * sqrtl(2.0L) * attenuate);
+		int32_t t_val = (int32_t) roundl(sample[x] * sqrtl(8.0L) * attenuate);
 
 		if (t_val > INT24_MAX) {
 			t_val = INT24_MAX;
@@ -1171,7 +1172,7 @@ uint32_t fill_single_sample(struct sf_samples *s, struct sample *sc55_samples, u
 
 	uint32_t len = s->shdr[s->num_samples].dwEnd - s->shdr[s->num_samples].dwStart;
 
-	double volume = SC552AMP(sc55_samples[source].volume);
+	double volume = SC552AMP(sc55_samples[source].volume * params->volume);
 
 	uint32_t last_value = 0;
 	for (int32_t x = 0; x < 5; x++) {
@@ -1461,10 +1462,11 @@ void add_instrument_params(struct ins_partial *p, struct sf_instruments *i, stru
 		add_igen_word(i, sfg_sustainVolEnv, (terminal_vol > 0) ? round(MAG2DB(terminal_vol)) : 1440);
 	}
 
+	params->volume = (float)inst->header[ih_attenuation] / 127.0;
+	params->volume *= (float)p->pp[pp_part_attenuation] / 127.0;
+
 	if (is_drum)
-		add_igen_word(i, sfg_initialAttenuation, round(PCT2VOL2(p->pp[pp_part_attenuation] - (0x7f - drum->volume[drum_index]))));
-	else
-		add_igen_word(i, sfg_initialAttenuation, round(PCT2VOL2(p->pp[pp_part_attenuation])));
+		params->volume *= (float)drum->volume[drum_index] / 127.0;
 
 	// --------------------//
 	// Modulator Envelope //
@@ -1627,7 +1629,7 @@ uint32_t add_instrument(struct synth *sc55, struct sf_samples *s, uint32_t part_
 			// igen[igen_count++].genAmount.wAmount = (0x7F - sc55->samples[sc55->parts[x].samples[y]].volume) * 25;
 
 			if (partial->pp[67] != 64) {
-				short biasamp = (partial->pp[67] - 64) * -10;
+				int16_t biasamp = (partial->pp[67] - 64) * -10;
 
 				if (partial->pp[66] == 0) {
 					i->imod[i->imod_count].sfModSrcOper = 0x0203;
@@ -1677,7 +1679,7 @@ uint32_t add_instrument(struct synth *sc55, struct sf_samples *s, uint32_t part_
 				}
 
 				if (partial->pp[35] == 0) {
-					short base_fc = (partial->pp[33] + 48) * 100;
+					int16_t base_fc = (partial->pp[33] + 48) * 100;
 
 					if (partial->pp[36] == 0) {
 						// printf("adding modulator for %s\n", name);
@@ -1910,9 +1912,10 @@ int32_t main (int32_t argc, char **argv)
 				clean_name(ins->name, p->phdr[p->phdr_count].achPresetName);
 				p->pbag[p->pbag_count++].wGenNdx = p->pgen_count;
 
+/*
 				p->pgen[p->pgen_count].sfGenOper = sfg_initialAttenuation;
 				p->pgen[p->pgen_count++].genAmount.wAmount = PCT2VOL2(ins->header[ih_attenuation]);
-
+*/
 /*
 				if (ins->header[ih_panpot]) {
 					p->pgen[p->pgen_count].sfGenOper = sfg_pan;
