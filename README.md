@@ -2,7 +2,7 @@
 Written by Kitrinx and NewRisingSun, forked by hanubeki.
 
 
-## Fork notice: I'm done, I think gm.dls is better.
+## Fork notice: I did it, and it's almost ready.
 This fork is considered as "finished."
 Feel free to fork this if you want to add something.
 

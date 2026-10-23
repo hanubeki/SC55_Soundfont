@@ -1914,6 +1914,7 @@ int32_t main (int32_t argc, char **argv)
 				p->pgen[p->pgen_count].sfGenOper = sfg_initialAttenuation;
 				p->pgen[p->pgen_count++].genAmount.wAmount = PCT2VOL(ins->header[ih_attenuation]);
 */
+
 /*
 				if (ins->header[ih_panpot]) {
 					p->pgen[p->pgen_count].sfGenOper = sfg_pan;
